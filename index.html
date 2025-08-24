@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daniels tidslinje-mekker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none; /* Prevents pull-to-refresh on mobile */
+        }
+        canvas {
+            cursor: grab;
+        }
+        canvas.grabbing {
+            cursor: grabbing;
+        }
+        .modal {
+            display: none; /* Hidden by default */
+        }
+        .modal.active {
+            display: flex; /* Show when active */
+        }
+        /* Custom styles for range slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db; /* gray-300 */
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type=range]:hover {
+            opacity: 1;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4f46e5; /* indigo-600 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #4f46e5; /* indigo-600 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col h-screen overflow-hidden">
+
+    <!-- Header & Controls -->
+    <header class="bg-white shadow-md p-2 md:p-4 flex flex-wrap items-center justify-between gap-4 z-10">
+        <h1 class="text-xl md:text-2xl font-bold text-gray-700 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><path d="M2 12h20"/><path d="M12 2a10 10 0 0 0-10 10v0a10 10 0 0 0 10 10v0a10 10 0 0 0 10-10v0a10 10 0 0 0-10-10v0Z"/><path d="M12 12v-2"/><path d="M12 18v-2"/></svg>
+            Daniels tidslinje-mekker
+        </h1>
+        
+        <div class="flex items-center gap-4 flex-wrap">
+            <!-- Date Range Controls -->
+            <div class="flex items-center gap-2 flex-wrap border-r pr-4">
+                <label for="startDate" class="text-sm font-medium">Fra år...</label>
+                <input type="number" id="startDate" value="1990" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                <label for="endDate" class="text-sm font-medium">...til år.</label>
+                <input type="number" id="endDate" value="2030" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                <button id="setDateRange" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm font-semibold">Vis disse årene</button>
+            </div>
+             <!-- Zoom Sensitivity -->
+            <div class="flex items-center gap-2">
+                <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå:</label>
+                <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="1" class="w-24">
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-2 flex-wrap">
+            <button id="addEventBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 text-sm font-semibold">Legg til hendelse</button>
+            <button id="addPeriodBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-sm font-semibold">Legg til periode</button>
+            <button id="exportBtn" class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-600 text-sm font-semibold">Eksporter</button>
+            <button id="importBtn" class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-600 text-sm font-semibold">Importer</button>
+            <input type="file" id="importFile" class="hidden" accept=".json">
+        </div>
+    </header>
+
+    <!-- Main Content: Canvas -->
+    <main class="flex-grow relative">
+        <canvas id="timelineCanvas"></canvas>
+    </main>
+
+    <!-- Modals -->
+    <!-- Details Modal -->
+    <div id="detailsModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4 max-h-[90vh] overflow-y-auto">
+            <h2 id="detailsTitle" class="text-2xl font-bold mb-4 text-gray-800"></h2>
+            <p id="detailsDesc" class="text-gray-600 mb-4 whitespace-pre-wrap"></p>
+            <img id="detailsImg" src="" alt="Image preview" class="hidden max-w-full max-h-[50vh] mx-auto rounded-md mb-4 object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" >
+            <p id="detailsImgError" class="text-center text-red-500 hidden">Bilde kunne ikke lastes.</p>
+            <div class="flex justify-end">
+                <button type="button" id="closeDetails" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Lukk</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Event Modal -->
+    <div id="eventModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">Legg til ny hendelse</h2>
+            <form id="eventForm">
+                <div class="mb-4">
+                    <label for="eventDate" class="block text-sm font-medium text-gray-700">Dato (År)</label>
+                    <input type="number" step="any" id="eventDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="eventTitle" class="block text-sm font-medium text-gray-700">Tittel</label>
+                    <input type="text" id="eventTitle" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="eventDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
+                    <textarea id="eventDesc" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="eventImg" class="block text-sm font-medium text-gray-700">Bilde-URL (Valgfritt)</label>
+                    <input type="url" id="eventImg" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="flex justify-end gap-4">
+                    <button type="button" id="cancelEvent" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
+                    <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Legg til hendelse</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Period Modal -->
+    <div id="periodModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">Legg til ny periode</h2>
+            <form id="periodForm">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="periodStartDate" class="block text-sm font-medium text-gray-700">Startdato (År)</label>
+                        <input type="number" step="any" id="periodStartDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="periodEndDate" class="block text-sm font-medium text-gray-700">Sluttdato (År)</label>
+                        <input type="number" step="any" id="periodEndDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="periodTitle" class="block text-sm font-medium text-gray-700">Tittel</label>
+                    <input type="text" id="periodTitle" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="periodDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
+                    <textarea id="periodDesc" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="periodImg" class="block text-sm font-medium text-gray-700">Bilde-URL (Valgfritt)</label>
+                    <input type="url" id="periodImg" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="flex justify-end gap-4">
+                    <button type="button" id="cancelPeriod" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Legg til periode</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Export Modal -->
+    <div id="exportModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-20">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">Eksporter tidslinje</h2>
+            <p class="text-gray-600 mb-6">Velg eksportformat.</p>
+            <div class="flex flex-col gap-4">
+                <button id="exportJsonBtn" class="w-full px-4 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold">Last ned datafil (.json)</button>
+                <button id="exportJpegSettingsBtn" class="w-full px-4 py-3 bg-teal-500 text-white rounded-md hover:bg-teal-600 font-semibold">Last ned bilde (.jpeg)</button>
+            </div>
+             <div class="mt-6 text-right">
+                <button type="button" id="cancelExport" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Lukk</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export JPEG Settings Modal -->
+    <div id="exportJpegSettingsModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-30">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg m-4 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-4">Innstillinger for bildeeksport</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="exportStartDate" class="block text-sm font-medium text-gray-700">Startår</label>
+                    <input type="number" id="exportStartDate" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="exportEndDate" class="block text-sm font-medium text-gray-700">Sluttår</label>
+                    <input type="number" id="exportEndDate" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="exportWidth" class="block text-sm font-medium text-gray-700">Bredde (piksler)</label>
+                    <input type="number" id="exportWidth" value="1920" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="exportHeight" class="block text-sm font-medium text-gray-700">Høyde (piksler)</label>
+                    <input type="number" id="exportHeight" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                    <p class="text-xs text-gray-500 mt-1">Automatisk beregnet. Kan overstyres.</p>
+                </div>
+            </div>
+            <div id="exportSpinner" class="hidden my-4 text-center">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <p class="text-sm text-gray-600">Genererer bilde...</p>
+            </div>
+            <div class="flex justify-end gap-4 mt-6">
+                <button type="button" id="cancelExportJpeg" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
+                <button type="button" id="generateJpegBtn" class="px-4 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 font-semibold">Generer og last ned</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Elements ---
+        const canvas = document.getElementById('timelineCanvas');
+        const ctx = canvas.getContext('2d');
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const setDateRangeBtn = document.getElementById('setDateRange');
+        const zoomSensitivitySlider = document.getElementById('zoomSensitivity');
+        
+        // Modals
+        const detailsModal = document.getElementById('detailsModal');
+        const eventModal = document.getElementById('eventModal');
+        const periodModal = document.getElementById('periodModal');
+        const exportModal = document.getElementById('exportModal');
+        const exportJpegSettingsModal = document.getElementById('exportJpegSettingsModal');
+
+        // Buttons
+        const addEventBtn = document.getElementById('addEventBtn');
+        const addPeriodBtn = document.getElementById('addPeriodBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const importBtn = document.getElementById('importBtn');
+        const importFileInput = document.getElementById('importFile');
+        
+        // Modal Controls
+        document.getElementById('cancelEvent').addEventListener('click', () => closeModal(eventModal));
+        document.getElementById('cancelPeriod').addEventListener('click', () => closeModal(periodModal));
+        document.getElementById('cancelExport').addEventListener('click', () => closeModal(exportModal));
+        document.getElementById('closeDetails').addEventListener('click', () => closeModal(detailsModal));
+        document.getElementById('cancelExportJpeg').addEventListener('click', () => closeModal(exportJpegSettingsModal));
+        document.getElementById('exportJpegSettingsBtn').addEventListener('click', openExportJpegSettings);
+        document.getElementById('generateJpegBtn').addEventListener('click', exportJpeg);
+
+
+        // --- State Management ---
+        let state = {
+            timelineStart: 1990,
+            timelineEnd: 2030,
+            events: [],
+            periods: [],
+            view: {
+                zoom: 1, // pixels per year
+                panX: 0,
+                panY: 0,
+                markerDensity: 1,
+            },
+            images: {}, // Cache for loaded images
+            dragging: {
+                isDown: false,
+                startX: 0,
+                startY: 0,
+                scrollLeft: 0,
+                scrollTop: 0,
+                activePeriod: null,
+                dragType: null, // 'move', 'resize-left', 'resize-right'
+            }
+        };
+
+        // --- Canvas & Drawing Setup ---
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+            canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
+            canvas.style.width = `${canvas.parentElement.clientWidth}px`;
+            canvas.style.height = `${canvas.parentElement.clientHeight}px`;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            requestDraw();
+        }
+
+        // --- Coordinate Conversion ---
+        const dateToPx = (date) => (date - state.timelineStart) * state.view.zoom + state.view.panX;
+        const pxToDate = (px) => (px - state.view.panX) / state.view.zoom + state.timelineStart;
+
+        // --- Layout & Drawing ---
+        let drawQueued = false;
+        function requestDraw() {
+            if (!drawQueued) {
+                drawQueued = true;
+                requestAnimationFrame(() => {
+                    const dpr = window.devicePixelRatio || 1;
+                    const viewHeight = canvas.height / dpr;
+                    calculateLayout(dateToPx, viewHeight, state.view.panY);
+                    draw();
+                    drawQueued = false;
+                });
+            }
+        }
+        
+        function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
+            const eventLaneHeight = 50;
+            const periodLaneHeight = 50;
+            const labelPadding = 20; // px between labels
+
+            context.font = 'bold 14px Inter';
+
+            const sortedEvents = [...state.events].sort((a, b) => a.date - b.date);
+            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
+
+            const eventLanes = []; // Each lane stores the end pixel of the last item's label
+            sortedEvents.forEach(event => {
+                const eventX = coordFn(event.date);
+                const textWidth = context.measureText(event.title).width;
+                const labelStartX = eventX - textWidth / 2;
+                
+                let placed = false;
+                for (let i = 0; i < eventLanes.length; i++) {
+                    if (labelStartX > eventLanes[i] + labelPadding) {
+                        event.lane = i;
+                        eventLanes[i] = labelStartX + textWidth;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    event.lane = eventLanes.length;
+                    eventLanes.push(labelStartX + textWidth);
+                }
+                event.y = (viewHeight / 2) + panY - 30 - (event.lane * eventLaneHeight);
+            });
+
+            const periodLanes = [];
+            sortedPeriods.forEach(period => {
+                const startX = coordFn(period.startDate);
+                const endX = coordFn(period.endDate);
+                let placed = false;
+                for (let i = 0; i < periodLanes.length; i++) {
+                    if (startX > periodLanes[i] + 15) {
+                        period.lane = i;
+                        periodLanes[i] = endX;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    period.lane = periodLanes.length;
+                    periodLanes.push(endX);
+                }
+                period.y = (viewHeight / 2) + panY + 30 + (period.lane * periodLaneHeight);
+            });
+            return { eventLanes: eventLanes.length, periodLanes: periodLanes.length };
+        }
+
+        function draw() {
+            const dpr = window.devicePixelRatio;
+            const { width, height } = canvas;
+            ctx.clearRect(0, 0, width / dpr, height / dpr);
+
+            const axisY = (height / dpr / 2) + state.view.panY;
+            ctx.beginPath();
+            ctx.moveTo(0, axisY);
+            ctx.lineTo(width / dpr, axisY);
+            ctx.strokeStyle = '#4A5568';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            drawMarkers(axisY);
+            drawPeriods(axisY);
+            drawEvents(axisY);
+        }
+
+        function getMarkerInterval() {
+            const yearsOnScreen = (canvas.width / window.devicePixelRatio) / state.view.zoom;
+            const adjustedYears = yearsOnScreen / state.view.markerDensity;
+            if (adjustedYears > 5000) return 1000;
+            if (adjustedYears > 2000) return 500;
+            if (adjustedYears > 1000) return 200;
+            if (adjustedYears > 500) return 100;
+            if (adjustedYears > 200) return 50;
+            if (adjustedYears > 100) return 20;
+            if (adjustedYears > 50) return 10;
+            if (adjustedYears > 20) return 5;
+            if (adjustedYears > 10) return 2;
+            return 1;
+        }
+
+        function drawMarkers(axisY) {
+            const interval = getMarkerInterval();
+            const startYear = Math.floor(pxToDate(0) / interval) * interval;
+            const endYear = Math.ceil(pxToDate(canvas.width / window.devicePixelRatio) / interval) * interval;
+
+            ctx.fillStyle = '#4A5568';
+            ctx.textAlign = 'center';
+            ctx.font = '12px Inter';
+
+            for (let year = startYear; year <= endYear; year += interval) {
+                const x = dateToPx(year);
+                if (x < 0 || x > canvas.width / window.devicePixelRatio) continue;
+
+                const isMajor = year % (interval * 10) === 0;
+                const tickHeight = isMajor ? 15 : 8;
+                
+                ctx.beginPath();
+                ctx.moveTo(x, axisY - tickHeight);
+                ctx.lineTo(x, axisY + tickHeight);
+                ctx.strokeStyle = '#4A5568';
+                ctx.lineWidth = isMajor ? 2 : 1;
+                ctx.stroke();
+
+                if (isMajor || state.view.zoom > (5 / state.view.markerDensity)) {
+                    ctx.fillText(year, x, axisY + tickHeight + 15);
+                }
+            }
+        }
+
+        function drawEvents(axisY) {
+            state.events.forEach(event => {
+                const x = dateToPx(event.date);
+                
+                ctx.beginPath();
+                ctx.moveTo(x, axisY);
+                ctx.lineTo(x, event.y);
+                ctx.strokeStyle = '#38A169';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(x, event.y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#38A169';
+                ctx.fill();
+                
+                ctx.fillStyle = '#2D3748';
+                ctx.font = 'bold 14px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(event.title, x, event.y - 15);
+            });
+        }
+        
+        function drawPeriods(axisY) {
+            const periodHeight = 40;
+            state.periods.forEach(period => {
+                const startX = dateToPx(period.startDate);
+                const endX = dateToPx(period.endDate);
+                const width = endX - startX;
+
+                ctx.fillStyle = 'rgba(66, 153, 225, 0.7)';
+                ctx.strokeStyle = '#2B6CB0';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.roundRect(startX, period.y, width, periodHeight, 8);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Inter';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(startX, period.y, width, periodHeight);
+                ctx.clip();
+                ctx.fillText(period.title, startX + width / 2, period.y + periodHeight / 2);
+                ctx.restore();
+            });
+        }
+        
+        // --- Image Loading ---
+        function loadImage(item) {
+            if (item.img && !state.images[item.img]) {
+                const image = new Image();
+                image.src = item.img;
+                image.onload = () => { state.images[item.img] = image; requestDraw(); };
+                image.onerror = () => { console.error(`Failed to load image: ${item.img}`); state.images[item.img] = null; }
+            }
+        }
+
+        // --- Event Handlers ---
+        setDateRangeBtn.addEventListener('click', () => {
+            const start = parseInt(startDateInput.value, 10);
+            const end = parseInt(endDateInput.value, 10);
+            if (!isNaN(start) && !isNaN(end) && start < end) {
+                state.timelineStart = start;
+                state.timelineEnd = end;
+                const totalYears = state.timelineEnd - state.timelineStart;
+                state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
+                state.view.panX = 0;
+                state.view.panY = 0;
+                requestDraw();
+            } else {
+                alert('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.');
+            }
+        });
+
+        zoomSensitivitySlider.addEventListener('input', (e) => {
+            state.view.markerDensity = parseFloat(e.target.value);
+            requestDraw();
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const zoomFactor = 1.1;
+            const dateAtMouse = pxToDate(mouseX);
+
+            if (e.deltaY < 0) { state.view.zoom *= zoomFactor; } 
+            else { state.view.zoom /= zoomFactor; }
+            
+            state.view.panX = mouseX - (dateAtMouse - state.timelineStart) * state.view.zoom;
+            requestDraw();
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            state.dragging.isDown = true;
+            state.dragging.startX = e.clientX;
+            state.dragging.startY = e.clientY;
+            state.dragging.scrollLeft = state.view.panX;
+            state.dragging.scrollTop = state.view.panY;
+
+            const period = getPeriodAt(mouseX, mouseY);
+            if (period) {
+                state.dragging.activePeriod = period;
+                const startPx = dateToPx(period.item.startDate);
+                const endPx = dateToPx(period.item.endDate);
+                const handleSize = 10;
+                
+                if (mouseX > endPx - handleSize) { state.dragging.dragType = 'resize-right'; } 
+                else if (mouseX < startPx + handleSize) { state.dragging.dragType = 'resize-left'; } 
+                else { state.dragging.dragType = 'move'; }
+            } else {
+                state.dragging.activePeriod = null;
+                state.dragging.dragType = null;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            state.dragging.isDown = false;
+            canvas.classList.remove('grabbing');
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (state.dragging.isDown) {
+                state.dragging.isDown = false;
+                canvas.classList.remove('grabbing');
+                canvas.style.cursor = 'grab';
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (state.dragging.isDown) {
+                canvas.classList.add('grabbing');
+                const dx = e.clientX - state.dragging.startX;
+                const dy = e.clientY - state.dragging.startY;
+
+                if (state.dragging.activePeriod) {
+                    const p = state.dragging.activePeriod.item;
+                    if (state.dragging.dragType === 'move') {
+                        const dateChange = dx / state.view.zoom;
+                        p.startDate += dateChange;
+                        p.endDate += dateChange;
+                    } else if (state.dragging.dragType === 'resize-right') {
+                        p.endDate = Math.max(p.startDate + 0.1, pxToDate(mouseX));
+                    } else if (state.dragging.dragType === 'resize-left') {
+                        p.startDate = Math.min(p.endDate - 0.1, pxToDate(mouseX));
+                    }
+                    state.dragging.startX = e.clientX;
+                } else {
+                    state.view.panX = state.dragging.scrollLeft + dx;
+                    state.view.panY = state.dragging.scrollTop + dy;
+                }
+                requestDraw();
+            } else {
+                const period = getPeriodAt(mouseX, mouseY);
+                const event = getEventAt(mouseX, mouseY);
+                if (period) {
+                    const startPx = dateToPx(period.item.startDate);
+                    const endPx = dateToPx(period.item.endDate);
+                    if (mouseX > endPx - 10 || mouseX < startPx + 10) { canvas.style.cursor = 'ew-resize'; } 
+                    else { canvas.style.cursor = 'move'; }
+                } else if (event) {
+                    canvas.style.cursor = 'pointer';
+                } else {
+                    canvas.style.cursor = 'grab';
+                }
+            }
+        });
+        
+        canvas.addEventListener('click', (e) => {
+            if (Math.abs(e.clientX - state.dragging.startX) > 5 || Math.abs(e.clientY - state.dragging.startY) > 5) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const event = getEventAt(mouseX, mouseY);
+            if (event) { showDetails(event.item); return; }
+
+            const period = getPeriodAt(mouseX, mouseY);
+            if (period) { showDetails(period.item); return; }
+        });
+
+        function getEventAt(x, y) {
+            const clickRadius = 10;
+            for (let i = state.events.length - 1; i >= 0; i--) {
+                const event = state.events[i];
+                const eventX = dateToPx(event.date);
+                const dist = Math.sqrt(Math.pow(x - eventX, 2) + Math.pow(y - event.y, 2));
+                if (dist <= clickRadius) return { item: event, index: i };
+            }
+            return null;
+        }
+
+        function getPeriodAt(x, y) {
+            const periodHeight = 40;
+            for (let i = state.periods.length - 1; i >= 0; i--) {
+                const period = state.periods[i];
+                const startX = dateToPx(period.startDate);
+                const endX = dateToPx(period.endDate);
+                if (x >= startX && x <= endX && y >= period.y && y <= period.y + periodHeight) {
+                    return { item: period, index: i };
+                }
+            }
+            return null;
+        }
+
+        // --- Modal Logic ---
+        function openModal(modal) { modal.classList.add('active'); }
+        function closeModal(modal) { modal.classList.remove('active'); }
+
+        function showDetails(item) {
+            document.getElementById('detailsTitle').textContent = item.title;
+            document.getElementById('detailsDesc').textContent = item.description || 'Ingen beskrivelse.';
+            const imgEl = document.getElementById('detailsImg');
+            const imgErrorEl = document.getElementById('detailsImgError');
+            
+            if (item.img) {
+                imgEl.src = item.img;
+                imgEl.style.display = 'block';
+                imgErrorEl.style.display = 'none';
+            } else {
+                imgEl.style.display = 'none';
+                imgErrorEl.style.display = 'none';
+            }
+            openModal(detailsModal);
+        }
+
+        addEventBtn.addEventListener('click', () => openModal(eventModal));
+        addPeriodBtn.addEventListener('click', () => openModal(periodModal));
+        exportBtn.addEventListener('click', () => openModal(exportModal));
+
+        document.getElementById('eventForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newEvent = {
+                id: Date.now(),
+                date: parseFloat(document.getElementById('eventDate').value),
+                title: document.getElementById('eventTitle').value,
+                description: document.getElementById('eventDesc').value,
+                img: document.getElementById('eventImg').value,
+            };
+            state.events.push(newEvent);
+            loadImage(newEvent);
+            requestDraw();
+            e.target.reset();
+            closeModal(eventModal);
+        });
+
+        document.getElementById('periodForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newPeriod = {
+                id: Date.now(),
+                startDate: parseFloat(document.getElementById('periodStartDate').value),
+                endDate: parseFloat(document.getElementById('periodEndDate').value),
+                title: document.getElementById('periodTitle').value,
+                description: document.getElementById('periodDesc').value,
+                img: document.getElementById('periodImg').value,
+            };
+            if (newPeriod.startDate >= newPeriod.endDate) {
+                alert('Startdato må være før sluttdato.');
+                return;
+            }
+            state.periods.push(newPeriod);
+            loadImage(newPeriod);
+            requestDraw();
+            e.target.reset();
+            closeModal(periodModal);
+        });
+
+        // --- Import/Export Logic ---
+        document.getElementById('exportJsonBtn').addEventListener('click', () => {
+            const dataToExport = {
+                timelineStart: state.timelineStart,
+                timelineEnd: state.timelineEnd,
+                events: state.events.map(({lane, y, ...rest}) => rest),
+                periods: state.periods.map(({lane, y, ...rest}) => rest),
+            };
+            const dataStr = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tidslinje.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            closeModal(exportModal);
+        });
+        
+        function openExportJpegSettings() {
+            document.getElementById('exportStartDate').value = state.timelineStart;
+            document.getElementById('exportEndDate').value = state.timelineEnd;
+            document.getElementById('exportWidth').value = 1920;
+            updateCalculatedExportHeight();
+            openModal(exportJpegSettingsModal);
+        }
+
+        function updateCalculatedExportHeight() {
+            const start = parseFloat(document.getElementById('exportStartDate').value);
+            const end = parseFloat(document.getElementById('exportEndDate').value);
+            const width = parseInt(document.getElementById('exportWidth').value, 10);
+
+            if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return;
+            
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+
+            const exportZoom = width / (end - start);
+            const dateToPxExport = (date) => (date - start) * exportZoom;
+            
+            const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 0, 0, tempCtx);
+            
+            const requiredHeight = (eventLanes * 50) + (periodLanes * 50) + 100; // 50 per lane + 100 padding
+            document.getElementById('exportHeight').value = Math.max(400, requiredHeight);
+        }
+        
+        ['exportStartDate', 'exportEndDate', 'exportWidth'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateCalculatedExportHeight);
+        });
+
+        async function exportJpeg() {
+            const start = parseFloat(document.getElementById('exportStartDate').value);
+            const end = parseFloat(document.getElementById('exportEndDate').value);
+            const width = parseInt(document.getElementById('exportWidth').value, 10);
+            const height = parseInt(document.getElementById('exportHeight').value, 10);
+            
+            if (isNaN(start) || isNaN(end) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0 || start >= end) {
+                alert('Vennligst fyll inn gyldige eksportinnstillinger.');
+                return;
+            }
+
+            document.getElementById('exportSpinner').style.display = 'block';
+            document.getElementById('generateJpegBtn').disabled = true;
+
+            // Use setTimeout to allow the UI to update and show the spinner
+            setTimeout(() => {
+                try {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = width;
+                    tempCanvas.height = height;
+                    const tempCtx = tempCanvas.getContext('2d');
+
+                    // Draw background
+                    tempCtx.fillStyle = '#f7fafc'; // gray-100
+                    tempCtx.fillRect(0, 0, width, height);
+
+                    const exportZoom = width / (end - start);
+                    const dateToPxExport = (date) => (date - start) * exportZoom;
+                    
+                    calculateLayout(dateToPxExport, height, 0, tempCtx);
+                    
+                    const axisY = height / 2;
+                    
+                    // Draw axis
+                    tempCtx.beginPath();
+                    tempCtx.moveTo(0, axisY);
+                    tempCtx.lineTo(width, axisY);
+                    tempCtx.strokeStyle = '#4A5568';
+                    tempCtx.lineWidth = 2;
+                    tempCtx.stroke();
+                    
+                    // Draw markers, events, and periods on the temp canvas
+                    // This requires replicating the draw functions but with the temp context and export coords
+                    // For simplicity in this example, we'll just re-use the main draw functions after temporarily setting state
+                    // A more robust solution would pass the context and settings to each draw function.
+                    // This is a simplified simulation for demonstration:
+                    const originalState = JSON.parse(JSON.stringify(state));
+                    
+                    state.timelineStart = start;
+                    state.timelineEnd = end;
+                    state.view.zoom = exportZoom;
+                    state.view.panX = 0;
+                    state.view.panY = 0;
+
+                    // Re-calculate layout for the export canvas dimensions
+                    calculateLayout(dateToPx, height, 0);
+
+                    // Re-implement drawing functions for the temporary context
+                    const drawOnTempCanvas = (tempCtx, tempWidth, tempHeight) => {
+                        const tempAxisY = tempHeight / 2;
+                        
+                        // Draw Markers
+                        const interval = getMarkerInterval();
+                        const startYear = Math.floor(pxToDate(0) / interval) * interval;
+                        const endYear = Math.ceil(pxToDate(tempWidth) / interval) * interval;
+                        tempCtx.fillStyle = '#4A5568';
+                        tempCtx.textAlign = 'center';
+                        tempCtx.font = '12px Inter';
+                        for (let year = startYear; year <= endYear; year += interval) {
+                            const x = dateToPx(year);
+                            if (x < 0 || x > tempWidth) continue;
+                            const tickHeight = year % (interval * 10) === 0 ? 15 : 8;
+                            tempCtx.beginPath();
+                            tempCtx.moveTo(x, tempAxisY - tickHeight);
+                            tempCtx.lineTo(x, tempAxisY + tickHeight);
+                            tempCtx.strokeStyle = '#4A5568';
+                            tempCtx.lineWidth = year % (interval * 10) === 0 ? 2 : 1;
+                            tempCtx.stroke();
+                            tempCtx.fillText(year, x, tempAxisY + tickHeight + 15);
+                        }
+
+                        // Draw Events & Periods (using their calculated .y property)
+                        state.events.forEach(event => {
+                            const x = dateToPx(event.date);
+                            tempCtx.beginPath(); tempCtx.moveTo(x, tempAxisY); tempCtx.lineTo(x, event.y); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
+                            tempCtx.beginPath(); tempCtx.arc(x, event.y, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
+                            tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, event.y - 15);
+                        });
+                        state.periods.forEach(period => {
+                            const startX = dateToPx(period.startDate); const endX = dateToPx(period.endDate); const pWidth = endX - startX;
+                            tempCtx.fillStyle = 'rgba(66, 153, 225, 0.7)'; tempCtx.strokeStyle = '#2B6CB0'; tempCtx.lineWidth = 2;
+                            tempCtx.beginPath(); tempCtx.roundRect(startX, period.y, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
+                            tempCtx.fillStyle = 'white'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.textBaseline = 'middle';
+                            tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, period.y, pWidth, 40); tempCtx.clip();
+                            tempCtx.fillText(period.title, startX + pWidth / 2, period.y + 20); tempCtx.restore();
+                        });
+                    };
+
+                    drawOnTempCanvas(tempCtx, width, height);
+
+                    // Restore original state
+                    Object.assign(state, originalState);
+                    requestDraw(); // Redraw main canvas with original state
+
+                    const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+                    const a = document.createElement('a');
+                    a.href = dataUrl;
+                    a.download = 'tidslinje.jpeg';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                } catch (err) {
+                    console.error("Export failed:", err);
+                    alert("En feil oppstod under eksporten.");
+                } finally {
+                    document.getElementById('exportSpinner').style.display = 'none';
+                    document.getElementById('generateJpegBtn').disabled = false;
+                    closeModal(exportJpegSettingsModal);
+                    closeModal(exportModal);
+                }
+            }, 50); // 50ms delay
+        }
+
+        importBtn.addEventListener('click', () => importFileInput.click());
+
+        importFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const importedData = JSON.parse(event.target.result);
+                    if (importedData.timelineStart && importedData.timelineEnd && importedData.events && importedData.periods) {
+                        state.timelineStart = importedData.timelineStart;
+                        state.timelineEnd = importedData.timelineEnd;
+                        state.events = importedData.events;
+                        state.periods = importedData.periods;
+                        
+                        startDateInput.value = state.timelineStart;
+                        endDateInput.value = state.timelineEnd;
+                        
+                        state.images = {};
+                        [...state.events, ...state.periods].forEach(loadImage);
+
+                        const totalYears = state.timelineEnd - state.timelineStart;
+                        state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
+                        state.view.panX = 0;
+                        state.view.panY = 0;
+
+                        requestDraw();
+                    } else {
+                        throw new Error('Invalid timeline file format.');
+                    }
+                } catch (err) {
+                    alert('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format.');
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            importFileInput.value = '';
+        });
+
+        // --- Initial Setup ---
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        setDateRangeBtn.click();
+    });
+    </script>
+</body>
+</html>
