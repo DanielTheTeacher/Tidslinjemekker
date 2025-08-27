@@ -104,17 +104,22 @@
             <p id="detailsDesc" class="text-gray-600 mb-4 whitespace-pre-wrap"></p>
             <img id="detailsImg" src="" alt="Image preview" class="hidden max-w-full max-h-[50vh] mx-auto rounded-md mb-4 object-contain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" >
             <p id="detailsImgError" class="text-center text-red-500 hidden">Bilde kunne ikke lastes.</p>
-            <div class="flex justify-end">
+            <div class="flex justify-between items-center">
+                <div>
+                    <button type="button" id="editItemBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Rediger</button>
+                    <button type="button" id="deleteItemBtn" class="px-4 py-2 ml-2 bg-red-600 text-white rounded-md hover:bg-red-700">Slett</button>
+                </div>
                 <button type="button" id="closeDetails" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Lukk</button>
             </div>
         </div>
     </div>
     
     <!-- Event Modal -->
-    <div id="eventModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-20">
+    <div id="eventModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-40">
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4 max-h-[90vh] overflow-y-auto">
-            <h2 class="text-2xl font-bold mb-4">Legg til ny hendelse</h2>
+            <h2 id="eventModalTitle" class="text-2xl font-bold mb-4">Legg til ny hendelse</h2>
             <form id="eventForm">
+                <input type="hidden" id="eventId">
                 <div class="mb-4">
                     <label for="eventDate" class="block text-sm font-medium text-gray-700">Dato (År)</label>
                     <input type="number" step="any" id="eventDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
@@ -133,17 +138,18 @@
                 </div>
                 <div class="flex justify-end gap-4">
                     <button type="button" id="cancelEvent" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
-                    <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Legg til hendelse</button>
+                    <button type="submit" id="saveEventBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Legg til hendelse</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Period Modal -->
-    <div id="periodModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-20">
+    <div id="periodModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-40">
         <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md m-4 max-h-[90vh] overflow-y-auto">
-            <h2 class="text-2xl font-bold mb-4">Legg til ny periode</h2>
+            <h2 id="periodModalTitle" class="text-2xl font-bold mb-4">Legg til ny periode</h2>
             <form id="periodForm">
+                <input type="hidden" id="periodId">
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label for="periodStartDate" class="block text-sm font-medium text-gray-700">Startdato (År)</label>
@@ -168,7 +174,7 @@
                 </div>
                 <div class="flex justify-end gap-4">
                     <button type="button" id="cancelPeriod" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Legg til periode</button>
+                    <button type="submit" id="savePeriodBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Legg til periode</button>
                 </div>
             </form>
         </div>
@@ -181,7 +187,8 @@
             <p class="text-gray-600 mb-6">Velg eksportformat.</p>
             <div class="flex flex-col gap-4">
                 <button id="exportJsonBtn" class="w-full px-4 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold">Last ned datafil (.json)</button>
-                <button id="exportJpegSettingsBtn" class="w-full px-4 py-3 bg-teal-500 text-white rounded-md hover:bg-teal-600 font-semibold">Last ned bilde (.jpeg)</button>
+                <button id="exportJpegAutoBtn" class="w-full px-4 py-3 bg-teal-500 text-white rounded-md hover:bg-teal-600 font-semibold">Last ned bilde (Auto)</button>
+                <button id="exportJpegSettingsBtn" class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Manuelle innstillinger for bilde...</button>
             </div>
              <div class="mt-6 text-right">
                 <button type="button" id="cancelExport" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Lukk</button>
@@ -212,6 +219,12 @@
                     <p class="text-xs text-gray-500 mt-1">Automatisk beregnet. Kan overstyres.</p>
                 </div>
             </div>
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="exportDescriptions" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                    <span class="ml-2 text-sm text-gray-700">Vis beskrivelser</span>
+                </label>
+            </div>
             <div id="exportSpinner" class="hidden my-4 text-center">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 <p class="text-sm text-gray-600">Genererer bilde...</p>
@@ -223,11 +236,23 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm m-4">
+            <h2 id="confirmTitle" class="text-lg font-bold mb-4">Er du sikker?</h2>
+            <p id="confirmText" class="text-gray-600 mb-6">Denne handlingen kan ikke angres.</p>
+            <div class="flex justify-end gap-4">
+                <button type="button" id="confirmCancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
+                <button type="button" id="confirmOk" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Slett</button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         // --- DOM Elements ---
-        const canvas = document.getElementById('timelineCanvas');
+        const canvas = document.getElementById('timelineCanvas'); // FIX: Correct ID
         const ctx = canvas.getContext('2d');
         const startDateInput = document.getElementById('startDate');
         const endDateInput = document.getElementById('endDate');
@@ -240,6 +265,7 @@
         const periodModal = document.getElementById('periodModal');
         const exportModal = document.getElementById('exportModal');
         const exportJpegSettingsModal = document.getElementById('exportJpegSettingsModal');
+        const confirmModal = document.getElementById('confirmModal');
 
         // Buttons
         const addEventBtn = document.getElementById('addEventBtn');
@@ -248,16 +274,6 @@
         const importBtn = document.getElementById('importBtn');
         const importFileInput = document.getElementById('importFile');
         
-        // Modal Controls
-        document.getElementById('cancelEvent').addEventListener('click', () => closeModal(eventModal));
-        document.getElementById('cancelPeriod').addEventListener('click', () => closeModal(periodModal));
-        document.getElementById('cancelExport').addEventListener('click', () => closeModal(exportModal));
-        document.getElementById('closeDetails').addEventListener('click', () => closeModal(detailsModal));
-        document.getElementById('cancelExportJpeg').addEventListener('click', () => closeModal(exportJpegSettingsModal));
-        document.getElementById('exportJpegSettingsBtn').addEventListener('click', openExportJpegSettings);
-        document.getElementById('generateJpegBtn').addEventListener('click', exportJpeg);
-
-
         // --- State Management ---
         let state = {
             timelineStart: 1990,
@@ -277,9 +293,17 @@
                 startY: 0,
                 scrollLeft: 0,
                 scrollTop: 0,
-                activePeriod: null,
+                activeItem: null, // Can be an event or a period
                 dragType: null, // 'move', 'resize-left', 'resize-right'
-            }
+                creationRect: null, // For drag-to-create-period
+            },
+            mouse: {
+                x: 0,
+                y: 0,
+                isOverItem: false,
+            },
+            editingItemId: null,
+            editingItemType: null,
         };
 
         // --- Canvas & Drawing Setup ---
@@ -313,20 +337,18 @@
         
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
             const eventLaneHeight = 50;
-            const periodLaneHeight = 50;
-            const labelPadding = 20; // px between labels
+            const periodLaneHeight = 55; // Increased for text outside
+            const labelPadding = 20;
 
             context.font = 'bold 14px Inter';
-
             const sortedEvents = [...state.events].sort((a, b) => a.date - b.date);
             const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
 
-            const eventLanes = []; // Each lane stores the end pixel of the last item's label
+            const eventLanes = [];
             sortedEvents.forEach(event => {
                 const eventX = coordFn(event.date);
                 const textWidth = context.measureText(event.title).width;
                 const labelStartX = eventX - textWidth / 2;
-                
                 let placed = false;
                 for (let i = 0; i < eventLanes.length; i++) {
                     if (labelStartX > eventLanes[i] + labelPadding) {
@@ -349,7 +371,7 @@
                 const endX = coordFn(period.endDate);
                 let placed = false;
                 for (let i = 0; i < periodLanes.length; i++) {
-                    if (startX > periodLanes[i] + 15) {
+                    if (startX > periodLanes[i] + labelPadding) {
                         period.lane = i;
                         periodLanes[i] = endX;
                         placed = true;
@@ -381,6 +403,34 @@
             drawMarkers(axisY);
             drawPeriods(axisY);
             drawEvents(axisY);
+            drawCreationRect();
+            drawHoverIndicator();
+        }
+
+        function drawHoverIndicator() {
+            if (state.dragging.isDown || state.mouse.isOverItem) return;
+            const axisY = (canvas.height / window.devicePixelRatio / 2) + state.view.panY;
+            const x = state.mouse.x;
+            const y = axisY - 30;
+
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, y); ctx.strokeStyle = '#A0AEC0'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fillStyle = '#A0AEC0'; ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+
+        function drawCreationRect() {
+            if (!state.dragging.creationRect) return;
+            const rect = state.dragging.creationRect;
+            const x = Math.min(rect.startX, rect.endX);
+            const width = Math.abs(rect.endX - rect.startX);
+            const axisY = (canvas.height / window.devicePixelRatio / 2) + state.view.panY;
+            
+            ctx.fillStyle = 'rgba(66, 153, 225, 0.3)';
+            ctx.strokeStyle = 'rgba(43, 108, 176, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.fillRect(x, axisY + 30, width, 40);
+            ctx.strokeRect(x, axisY + 30, width, 40);
         }
 
         function getMarkerInterval() {
@@ -403,24 +453,15 @@
             const startYear = Math.floor(pxToDate(0) / interval) * interval;
             const endYear = Math.ceil(pxToDate(canvas.width / window.devicePixelRatio) / interval) * interval;
 
-            ctx.fillStyle = '#4A5568';
-            ctx.textAlign = 'center';
-            ctx.font = '12px Inter';
+            ctx.fillStyle = '#4A5568'; ctx.textAlign = 'center'; ctx.font = '12px Inter';
 
             for (let year = startYear; year <= endYear; year += interval) {
                 const x = dateToPx(year);
                 if (x < 0 || x > canvas.width / window.devicePixelRatio) continue;
-
                 const isMajor = year % (interval * 10) === 0;
                 const tickHeight = isMajor ? 15 : 8;
-                
-                ctx.beginPath();
-                ctx.moveTo(x, axisY - tickHeight);
-                ctx.lineTo(x, axisY + tickHeight);
-                ctx.strokeStyle = '#4A5568';
-                ctx.lineWidth = isMajor ? 2 : 1;
-                ctx.stroke();
-
+                ctx.beginPath(); ctx.moveTo(x, axisY - tickHeight); ctx.lineTo(x, axisY + tickHeight);
+                ctx.strokeStyle = '#4A5568'; ctx.lineWidth = isMajor ? 2 : 1; ctx.stroke();
                 if (isMajor || state.view.zoom > (5 / state.view.markerDensity)) {
                     ctx.fillText(year, x, axisY + tickHeight + 15);
                 }
@@ -430,23 +471,9 @@
         function drawEvents(axisY) {
             state.events.forEach(event => {
                 const x = dateToPx(event.date);
-                
-                ctx.beginPath();
-                ctx.moveTo(x, axisY);
-                ctx.lineTo(x, event.y);
-                ctx.strokeStyle = '#38A169';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(x, event.y, 6, 0, Math.PI * 2);
-                ctx.fillStyle = '#38A169';
-                ctx.fill();
-                
-                ctx.fillStyle = '#2D3748';
-                ctx.font = 'bold 14px Inter';
-                ctx.textAlign = 'center';
-                ctx.fillText(event.title, x, event.y - 15);
+                ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = '#38A169'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = '#38A169'; ctx.fill();
+                ctx.fillStyle = '#2D3748'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(event.title, x, event.y - 15);
             });
         }
         
@@ -457,24 +484,19 @@
                 const endX = dateToPx(period.endDate);
                 const width = endX - startX;
 
-                ctx.fillStyle = 'rgba(66, 153, 225, 0.7)';
-                ctx.strokeStyle = '#2B6CB0';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.roundRect(startX, period.y, width, periodHeight, 8);
-                ctx.fill();
-                ctx.stroke();
+                ctx.fillStyle = 'rgba(66, 153, 225, 0.7)'; ctx.strokeStyle = '#2B6CB0'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.roundRect(startX, period.y, width, periodHeight, 8); ctx.fill(); ctx.stroke();
 
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 14px Inter';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.save();
-                ctx.beginPath();
-                ctx.rect(startX, period.y, width, periodHeight);
-                ctx.clip();
-                ctx.fillText(period.title, startX + width / 2, period.y + periodHeight / 2);
-                ctx.restore();
+                ctx.fillStyle = 'white'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                
+                const textFits = ctx.measureText(period.title).width < width - 10;
+                if (state.view.zoom > 0.5 && textFits) {
+                    ctx.save(); ctx.beginPath(); ctx.rect(startX, period.y, width, periodHeight); ctx.clip();
+                    ctx.fillText(period.title, startX + width / 2, period.y + periodHeight / 2); ctx.restore();
+                } else {
+                    ctx.fillStyle = '#2B6CB0';
+                    ctx.fillText(period.title, startX + width / 2, period.y - 10);
+                }
             });
         }
         
@@ -497,9 +519,7 @@
                 state.timelineEnd = end;
                 const totalYears = state.timelineEnd - state.timelineStart;
                 state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
-                state.view.panX = 0;
-                state.view.panY = 0;
-                requestDraw();
+                state.view.panX = 0; state.view.panY = 0; requestDraw();
             } else {
                 alert('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.');
             }
@@ -516,10 +536,7 @@
             const mouseX = e.clientX - rect.left;
             const zoomFactor = 1.1;
             const dateAtMouse = pxToDate(mouseX);
-
-            if (e.deltaY < 0) { state.view.zoom *= zoomFactor; } 
-            else { state.view.zoom /= zoomFactor; }
-            
+            if (e.deltaY < 0) { state.view.zoom *= zoomFactor; } else { state.view.zoom /= zoomFactor; }
             state.view.panX = mouseX - (dateAtMouse - state.timelineStart) * state.view.zoom;
             requestDraw();
         });
@@ -535,99 +552,118 @@
             state.dragging.scrollLeft = state.view.panX;
             state.dragging.scrollTop = state.view.panY;
 
-            const period = getPeriodAt(mouseX, mouseY);
-            if (period) {
-                state.dragging.activePeriod = period;
-                const startPx = dateToPx(period.item.startDate);
-                const endPx = dateToPx(period.item.endDate);
-                const handleSize = 10;
-                
-                if (mouseX > endPx - handleSize) { state.dragging.dragType = 'resize-right'; } 
-                else if (mouseX < startPx + handleSize) { state.dragging.dragType = 'resize-left'; } 
-                else { state.dragging.dragType = 'move'; }
+            let item = getPeriodAt(mouseX, mouseY) || getEventAt(mouseX, mouseY);
+
+            if (item) {
+                state.dragging.activeItem = item;
+                if (item.type === 'period') {
+                    const startPx = dateToPx(item.item.startDate);
+                    const endPx = dateToPx(item.item.endDate);
+                    const handleSize = 10;
+                    if (mouseX > endPx - handleSize) { state.dragging.dragType = 'resize-right'; } 
+                    else if (mouseX < startPx + handleSize) { state.dragging.dragType = 'resize-left'; } 
+                    else { state.dragging.dragType = 'move'; }
+                } else {
+                    state.dragging.dragType = 'move';
+                }
             } else {
-                state.dragging.activePeriod = null;
+                state.dragging.activeItem = null;
                 state.dragging.dragType = null;
+                state.dragging.creationRect = { startX: mouseX, endX: mouseX };
             }
         });
 
-        canvas.addEventListener('mouseup', () => {
+        canvas.addEventListener('mouseup', (e) => {
+            if (!state.dragging.isDown) return;
             state.dragging.isDown = false;
             canvas.classList.remove('grabbing');
+
+            if (state.dragging.creationRect) {
+                const rect = state.dragging.creationRect;
+                const dragDistance = Math.abs(rect.endX - rect.startX);
+
+                if (dragDistance < 5) { // It's a click
+                    const clickedDate = pxToDate(rect.startX);
+                    openEventModal(null, clickedDate);
+                } else { // It's a drag
+                    const startDate = pxToDate(Math.min(rect.startX, rect.endX));
+                    const endDate = pxToDate(Math.max(rect.startX, rect.endX));
+                    openPeriodModal(null, { startDate, endDate });
+                }
+                state.dragging.creationRect = null;
+                requestDraw();
+            }
         });
 
         canvas.addEventListener('mouseleave', () => {
+            state.mouse.x = -1; state.mouse.y = -1;
             if (state.dragging.isDown) {
                 state.dragging.isDown = false;
+                state.dragging.creationRect = null;
                 canvas.classList.remove('grabbing');
                 canvas.style.cursor = 'grab';
             }
+            requestDraw();
         });
 
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
+            state.mouse.x = mouseX;
+            state.mouse.y = mouseY;
 
             if (state.dragging.isDown) {
                 canvas.classList.add('grabbing');
                 const dx = e.clientX - state.dragging.startX;
                 const dy = e.clientY - state.dragging.startY;
 
-                if (state.dragging.activePeriod) {
-                    const p = state.dragging.activePeriod.item;
+                if (state.dragging.activeItem) {
+                    const item = state.dragging.activeItem.item;
+                    const type = state.dragging.activeItem.type;
+                    const dateChange = dx / state.view.zoom;
+
                     if (state.dragging.dragType === 'move') {
-                        const dateChange = dx / state.view.zoom;
-                        p.startDate += dateChange;
-                        p.endDate += dateChange;
-                    } else if (state.dragging.dragType === 'resize-right') {
-                        p.endDate = Math.max(p.startDate + 0.1, pxToDate(mouseX));
-                    } else if (state.dragging.dragType === 'resize-left') {
-                        p.startDate = Math.min(p.endDate - 0.1, pxToDate(mouseX));
+                        if (type === 'event') { item.date += dateChange; } 
+                        else { item.startDate += dateChange; item.endDate += dateChange; }
+                    } else if (type === 'period') {
+                        if (state.dragging.dragType === 'resize-right') { item.endDate = Math.max(item.startDate + 0.1, pxToDate(mouseX)); } 
+                        else if (state.dragging.dragType === 'resize-left') { item.startDate = Math.min(item.endDate - 0.1, pxToDate(mouseX)); }
                     }
                     state.dragging.startX = e.clientX;
+                    state.dragging.startY = e.clientY;
+                } else if (state.dragging.creationRect) {
+                    state.dragging.creationRect.endX = mouseX;
                 } else {
                     state.view.panX = state.dragging.scrollLeft + dx;
                     state.view.panY = state.dragging.scrollTop + dy;
                 }
-                requestDraw();
             } else {
-                const period = getPeriodAt(mouseX, mouseY);
-                const event = getEventAt(mouseX, mouseY);
-                if (period) {
-                    const startPx = dateToPx(period.item.startDate);
-                    const endPx = dateToPx(period.item.endDate);
-                    if (mouseX > endPx - 10 || mouseX < startPx + 10) { canvas.style.cursor = 'ew-resize'; } 
-                    else { canvas.style.cursor = 'move'; }
-                } else if (event) {
-                    canvas.style.cursor = 'pointer';
+                const item = getPeriodAt(mouseX, mouseY) || getEventAt(mouseX, mouseY);
+                state.mouse.isOverItem = !!item;
+                if (item) {
+                    if (item.type === 'period') {
+                        const startPx = dateToPx(item.item.startDate);
+                        const endPx = dateToPx(item.item.endDate);
+                        if (mouseX > endPx - 10 || mouseX < startPx + 10) { canvas.style.cursor = 'ew-resize'; } 
+                        else { canvas.style.cursor = 'move'; }
+                    } else {
+                        canvas.style.cursor = 'move';
+                    }
                 } else {
-                    canvas.style.cursor = 'grab';
+                    canvas.style.cursor = 'crosshair';
                 }
             }
+            requestDraw();
         });
         
-        canvas.addEventListener('click', (e) => {
-            if (Math.abs(e.clientX - state.dragging.startX) > 5 || Math.abs(e.clientY - state.dragging.startY) > 5) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-
-            const event = getEventAt(mouseX, mouseY);
-            if (event) { showDetails(event.item); return; }
-
-            const period = getPeriodAt(mouseX, mouseY);
-            if (period) { showDetails(period.item); return; }
-        });
-
         function getEventAt(x, y) {
             const clickRadius = 10;
             for (let i = state.events.length - 1; i >= 0; i--) {
                 const event = state.events[i];
                 const eventX = dateToPx(event.date);
                 const dist = Math.sqrt(Math.pow(x - eventX, 2) + Math.pow(y - event.y, 2));
-                if (dist <= clickRadius) return { item: event, index: i };
+                if (dist <= clickRadius) return { item: event, index: i, type: 'event' };
             }
             return null;
         }
@@ -639,7 +675,7 @@
                 const startX = dateToPx(period.startDate);
                 const endX = dateToPx(period.endDate);
                 if (x >= startX && x <= endX && y >= period.y && y <= period.y + periodHeight) {
-                    return { item: period, index: i };
+                    return { item: period, index: i, type: 'period' };
                 }
             }
             return null;
@@ -649,12 +685,13 @@
         function openModal(modal) { modal.classList.add('active'); }
         function closeModal(modal) { modal.classList.remove('active'); }
 
-        function showDetails(item) {
+        function showDetails(item, type) {
+            state.editingItemId = item.id;
+            state.editingItemType = type;
             document.getElementById('detailsTitle').textContent = item.title;
             document.getElementById('detailsDesc').textContent = item.description || 'Ingen beskrivelse.';
             const imgEl = document.getElementById('detailsImg');
             const imgErrorEl = document.getElementById('detailsImgError');
-            
             if (item.img) {
                 imgEl.src = item.img;
                 imgEl.style.display = 'block';
@@ -665,49 +702,141 @@
             }
             openModal(detailsModal);
         }
+        
+        // Modal Button Listeners
+        document.getElementById('closeDetails').addEventListener('click', () => closeModal(detailsModal));
+        document.getElementById('cancelEvent').addEventListener('click', () => closeModal(eventModal));
+        document.getElementById('cancelPeriod').addEventListener('click', () => closeModal(periodModal));
+        document.getElementById('cancelExport').addEventListener('click', () => closeModal(exportModal));
+        document.getElementById('cancelExportJpeg').addEventListener('click', () => closeModal(exportJpegSettingsModal));
 
-        addEventBtn.addEventListener('click', () => openModal(eventModal));
-        addPeriodBtn.addEventListener('click', () => openModal(periodModal));
-        exportBtn.addEventListener('click', () => openModal(exportModal));
+        document.getElementById('editItemBtn').addEventListener('click', () => {
+            const id = state.editingItemId;
+            const type = state.editingItemType;
+            if (!id || !type) return;
+            if (type === 'event') {
+                const event = state.events.find(e => e.id === id);
+                openEventModal(event);
+            } else if (type === 'period') {
+                const period = state.periods.find(p => p.id === id);
+                openPeriodModal(period);
+            }
+            closeModal(detailsModal);
+        });
+
+        document.getElementById('deleteItemBtn').addEventListener('click', () => {
+            showConfirm('Er du sikker på at du vil slette dette elementet?', () => {
+                const id = state.editingItemId;
+                const type = state.editingItemType;
+                if (type === 'event') { state.events = state.events.filter(e => e.id !== id); } 
+                else if (type === 'period') { state.periods = state.periods.filter(p => p.id !== id); }
+                closeModal(detailsModal);
+                requestDraw();
+            });
+        });
+
+        function showConfirm(message, onConfirm) {
+            document.getElementById('confirmText').textContent = message;
+            openModal(confirmModal);
+            const confirmOk = document.getElementById('confirmOk');
+            const confirmCancel = document.getElementById('confirmCancel');
+            const okListener = () => { onConfirm(); closeModal(confirmModal); cleanup(); };
+            const cancelListener = () => { closeModal(confirmModal); cleanup(); };
+            const cleanup = () => {
+                confirmOk.removeEventListener('click', okListener);
+                confirmCancel.removeEventListener('click', cancelListener);
+            };
+            confirmOk.addEventListener('click', okListener, { once: true });
+            confirmCancel.addEventListener('click', cancelListener, { once: true });
+        }
+
+        function openEventModal(event = null, date = null) {
+            document.getElementById('eventForm').reset();
+            if (event) { // Editing
+                document.getElementById('eventModalTitle').textContent = 'Rediger hendelse';
+                document.getElementById('saveEventBtn').textContent = 'Lagre endringer';
+                document.getElementById('eventId').value = event.id;
+                document.getElementById('eventDate').value = event.date;
+                document.getElementById('eventTitle').value = event.title;
+                document.getElementById('eventDesc').value = event.description;
+                document.getElementById('eventImg').value = event.img;
+            } else { // Creating new
+                document.getElementById('eventModalTitle').textContent = 'Legg til ny hendelse';
+                document.getElementById('saveEventBtn').textContent = 'Legg til hendelse';
+                document.getElementById('eventId').value = '';
+                if (date) document.getElementById('eventDate').value = parseFloat(date.toFixed(2));
+            }
+            openModal(eventModal);
+        }
+
+        function openPeriodModal(period = null, dates = null) {
+            document.getElementById('periodForm').reset();
+            if (period) { // Editing
+                document.getElementById('periodModalTitle').textContent = 'Rediger periode';
+                document.getElementById('savePeriodBtn').textContent = 'Lagre endringer';
+                document.getElementById('periodId').value = period.id;
+                document.getElementById('periodStartDate').value = period.startDate;
+                document.getElementById('periodEndDate').value = period.endDate;
+                document.getElementById('periodTitle').value = period.title;
+                document.getElementById('periodDesc').value = period.description;
+                document.getElementById('periodImg').value = period.img;
+            } else { // Creating new
+                document.getElementById('periodModalTitle').textContent = 'Legg til ny periode';
+                document.getElementById('savePeriodBtn').textContent = 'Legg til periode';
+                document.getElementById('periodId').value = '';
+                if (dates) {
+                    document.getElementById('periodStartDate').value = parseFloat(dates.startDate.toFixed(2));
+                    document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(2));
+                }
+            }
+            openModal(periodModal);
+        }
+
+        addEventBtn.addEventListener('click', () => openEventModal());
+        addPeriodBtn.addEventListener('click', () => openPeriodModal());
 
         document.getElementById('eventForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            const newEvent = {
-                id: Date.now(),
+            const eventId = document.getElementById('eventId').value;
+            const data = {
                 date: parseFloat(document.getElementById('eventDate').value),
                 title: document.getElementById('eventTitle').value,
                 description: document.getElementById('eventDesc').value,
                 img: document.getElementById('eventImg').value,
             };
-            state.events.push(newEvent);
-            loadImage(newEvent);
-            requestDraw();
-            e.target.reset();
-            closeModal(eventModal);
+            if (eventId) {
+                const index = state.events.findIndex(ev => ev.id == eventId);
+                if (index !== -1) state.events[index] = { ...state.events[index], ...data };
+            } else {
+                data.id = Date.now();
+                state.events.push(data);
+            }
+            loadImage(data); requestDraw(); e.target.reset(); closeModal(eventModal);
         });
 
         document.getElementById('periodForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            const newPeriod = {
-                id: Date.now(),
+            const periodId = document.getElementById('periodId').value;
+            const data = {
                 startDate: parseFloat(document.getElementById('periodStartDate').value),
                 endDate: parseFloat(document.getElementById('periodEndDate').value),
                 title: document.getElementById('periodTitle').value,
                 description: document.getElementById('periodDesc').value,
                 img: document.getElementById('periodImg').value,
             };
-            if (newPeriod.startDate >= newPeriod.endDate) {
-                alert('Startdato må være før sluttdato.');
-                return;
+            if (data.startDate >= data.endDate) { alert('Startdato må være før sluttdato.'); return; }
+            if (periodId) {
+                const index = state.periods.findIndex(p => p.id == periodId);
+                if (index !== -1) state.periods[index] = { ...state.periods[index], ...data };
+            } else {
+                data.id = Date.now();
+                state.periods.push(data);
             }
-            state.periods.push(newPeriod);
-            loadImage(newPeriod);
-            requestDraw();
-            e.target.reset();
-            closeModal(periodModal);
+            loadImage(data); requestDraw(); e.target.reset(); closeModal(periodModal);
         });
 
         // --- Import/Export Logic ---
+        exportBtn.addEventListener('click', () => openModal(exportModal));
         document.getElementById('exportJsonBtn').addEventListener('click', () => {
             const dataToExport = {
                 timelineStart: state.timelineStart,
@@ -718,176 +847,183 @@
             const dataStr = JSON.stringify(dataToExport, null, 2);
             const blob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'tidslinje.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const a = document.createElement('a'); a.href = url; a.download = 'tidslinje.json';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
             closeModal(exportModal);
         });
         
-        function openExportJpegSettings() {
-            document.getElementById('exportStartDate').value = state.timelineStart;
-            document.getElementById('exportEndDate').value = state.timelineEnd;
+        function getTimelineBounds() {
+            if (state.events.length === 0 && state.periods.length === 0) {
+                return { min: state.timelineStart, max: state.timelineEnd };
+            }
+            const eventDates = state.events.map(e => e.date);
+            const periodStartDates = state.periods.map(p => p.startDate);
+            const periodEndDates = state.periods.map(p => p.endDate);
+            const allDates = [...eventDates, ...periodStartDates, ...periodEndDates];
+            const min = Math.min(...allDates);
+            const max = Math.max(...allDates);
+            const margin = (max - min) * 0.05 || 1; // 5% margin or 1 year if no range
+            return { min: min - margin, max: max + margin };
+        }
+
+        document.getElementById('exportJpegAutoBtn').addEventListener('click', () => {
+            const bounds = getTimelineBounds();
+            const width = 1920;
+            const showDescriptions = false;
+            const height = calculateExportHeight(bounds.min, bounds.max, width, showDescriptions);
+            exportJpeg(bounds.min, bounds.max, width, height, showDescriptions);
+            closeModal(exportModal);
+        });
+        
+        document.getElementById('exportJpegSettingsBtn').addEventListener('click', () => {
+            const bounds = getTimelineBounds();
+            document.getElementById('exportStartDate').value = Math.floor(bounds.min);
+            document.getElementById('exportEndDate').value = Math.ceil(bounds.max);
             document.getElementById('exportWidth').value = 1920;
+            document.getElementById('exportDescriptions').checked = false;
             updateCalculatedExportHeight();
             openModal(exportJpegSettingsModal);
+        });
+
+        function calculateExportHeight(start, end, width, showDescriptions) {
+            if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return 400;
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            const exportZoom = width / (end - start);
+            const dateToPxExport = (date) => (date - start) * exportZoom;
+            const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 0, 0, tempCtx);
+            let descHeight = 0;
+            if (showDescriptions) {
+                tempCtx.font = '12px Inter';
+                [...state.events, ...state.periods].forEach(item => {
+                    if (item.description) {
+                        const lines = wrapText(tempCtx, item.description, 200).length;
+                        descHeight += lines * 14;
+                    }
+                });
+            }
+            const requiredHeight = (eventLanes * 50) + (periodLanes * 55) + descHeight + 150;
+            return Math.max(400, Math.ceil(requiredHeight));
         }
 
         function updateCalculatedExportHeight() {
             const start = parseFloat(document.getElementById('exportStartDate').value);
             const end = parseFloat(document.getElementById('exportEndDate').value);
             const width = parseInt(document.getElementById('exportWidth').value, 10);
-
-            if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return;
-            
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-
-            const exportZoom = width / (end - start);
-            const dateToPxExport = (date) => (date - start) * exportZoom;
-            
-            const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 0, 0, tempCtx);
-            
-            const requiredHeight = (eventLanes * 50) + (periodLanes * 50) + 100; // 50 per lane + 100 padding
-            document.getElementById('exportHeight').value = Math.max(400, requiredHeight);
+            const showDescriptions = document.getElementById('exportDescriptions').checked;
+            document.getElementById('exportHeight').value = calculateExportHeight(start, end, width, showDescriptions);
         }
         
-        ['exportStartDate', 'exportEndDate', 'exportWidth'].forEach(id => {
-            document.getElementById(id).addEventListener('change', updateCalculatedExportHeight);
+        ['exportStartDate', 'exportEndDate', 'exportWidth', 'exportDescriptions'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateCalculatedExportHeight);
         });
 
-        async function exportJpeg() {
+        async function exportJpeg(start, end, width, height, showDescriptions) {
+            if (isNaN(start) || isNaN(end) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0 || start >= end) {
+                alert('Vennligst fyll inn gyldige eksportinnstillinger.'); return;
+            }
+            document.getElementById('exportSpinner').style.display = 'block';
+            document.getElementById('generateJpegBtn').disabled = true;
+
+            setTimeout(() => {
+                try {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = width; tempCanvas.height = height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.fillStyle = '#f7fafc'; tempCtx.fillRect(0, 0, width, height);
+                    const exportZoom = width / (end - start);
+                    const dateToPxExport = (date) => (date - start) * exportZoom;
+                    calculateLayout(dateToPxExport, height, 0, tempCtx);
+                    drawOnTempCanvas(tempCtx, width, height, dateToPxExport, showDescriptions, start, end);
+                    const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+                    const a = document.createElement('a'); a.href = dataUrl; a.download = 'tidslinje.jpeg';
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                } catch (err) {
+                    console.error("Export failed:", err); alert("En feil oppstod under eksporten.");
+                } finally {
+                    document.getElementById('exportSpinner').style.display = 'none';
+                    document.getElementById('generateJpegBtn').disabled = false;
+                    closeModal(exportJpegSettingsModal); closeModal(exportModal);
+                }
+            }, 50);
+        }
+
+        function wrapText(context, text, maxWidth) {
+            const words = text.split(' '); let lines = []; let currentLine = words[0];
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i]; const width = context.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
+            }
+            lines.push(currentLine); return lines;
+        }
+
+        function drawOnTempCanvas(tempCtx, width, height, dateToPxFn, showDesc, start, end) {
+            const axisY = height / 2;
+            tempCtx.beginPath(); tempCtx.moveTo(0, axisY); tempCtx.lineTo(width, axisY); tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = 2; tempCtx.stroke();
+            
+            const tempState = { timelineStart: start, timelineEnd: end, view: { zoom: width / (end - start), markerDensity: 1 } };
+            const tempPxToDate = (px) => (px / tempState.view.zoom) + tempState.timelineStart;
+
+            const interval = getMarkerInterval.call({state: tempState, canvas: {width: width}});
+            const startYear = Math.floor(tempPxToDate(0) / interval) * interval;
+            const endYear = Math.ceil(tempPxToDate(width) / interval) * interval;
+            tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center'; tempCtx.font = '12px Inter';
+            for (let year = startYear; year <= endYear; year += interval) {
+                const x = dateToPxFn(year);
+                if (x < 0 || x > width) continue;
+                const tickHeight = year % (interval * 10) === 0 ? 15 : 8;
+                tempCtx.beginPath(); tempCtx.moveTo(x, axisY - tickHeight); tempCtx.lineTo(x, axisY + tickHeight);
+                tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = year % (interval * 10) === 0 ? 2 : 1; tempCtx.stroke();
+                tempCtx.fillText(year, x, axisY + tickHeight + 15);
+            }
+
+            state.events.forEach(event => {
+                const x = dateToPxFn(event.date);
+                tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, event.y); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
+                tempCtx.beginPath(); tempCtx.arc(x, event.y, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
+                tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, event.y - 15);
+                if (showDesc && event.description) {
+                    tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568';
+                    const lines = wrapText(tempCtx, event.description, 200);
+                    lines.forEach((line, i) => tempCtx.fillText(line, x, event.y + 15 + (i * 14)));
+                }
+            });
+
+            state.periods.forEach(period => {
+                const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
+                tempCtx.fillStyle = 'rgba(66, 153, 225, 0.7)'; tempCtx.strokeStyle = '#2B6CB0'; tempCtx.lineWidth = 2;
+                tempCtx.beginPath(); tempCtx.roundRect(startX, period.y, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
+                tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center';
+                const textFits = tempCtx.measureText(period.title).width < pWidth - 10;
+                if (textFits) {
+                    tempCtx.fillStyle = 'white'; tempCtx.textBaseline = 'middle';
+                    tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, period.y, pWidth, 40); tempCtx.clip();
+                    tempCtx.fillText(period.title, startX + pWidth / 2, period.y + 20); tempCtx.restore();
+                } else {
+                    tempCtx.fillStyle = '#2B6CB0'; tempCtx.textBaseline = 'alphabetic';
+                    tempCtx.fillText(period.title, startX + pWidth / 2, period.y - 10);
+                }
+                if (showDesc && period.description) {
+                    tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
+                    const lines = wrapText(tempCtx, period.description, 200);
+                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, period.y + 40 + 15 + (i * 14)));
+                }
+            });
+        }
+
+        document.getElementById('generateJpegBtn').addEventListener('click', () => {
             const start = parseFloat(document.getElementById('exportStartDate').value);
             const end = parseFloat(document.getElementById('exportEndDate').value);
             const width = parseInt(document.getElementById('exportWidth').value, 10);
             const height = parseInt(document.getElementById('exportHeight').value, 10);
-            
-            if (isNaN(start) || isNaN(end) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0 || start >= end) {
-                alert('Vennligst fyll inn gyldige eksportinnstillinger.');
-                return;
-            }
-
-            document.getElementById('exportSpinner').style.display = 'block';
-            document.getElementById('generateJpegBtn').disabled = true;
-
-            // Use setTimeout to allow the UI to update and show the spinner
-            setTimeout(() => {
-                try {
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = width;
-                    tempCanvas.height = height;
-                    const tempCtx = tempCanvas.getContext('2d');
-
-                    // Draw background
-                    tempCtx.fillStyle = '#f7fafc'; // gray-100
-                    tempCtx.fillRect(0, 0, width, height);
-
-                    const exportZoom = width / (end - start);
-                    const dateToPxExport = (date) => (date - start) * exportZoom;
-                    
-                    calculateLayout(dateToPxExport, height, 0, tempCtx);
-                    
-                    const axisY = height / 2;
-                    
-                    // Draw axis
-                    tempCtx.beginPath();
-                    tempCtx.moveTo(0, axisY);
-                    tempCtx.lineTo(width, axisY);
-                    tempCtx.strokeStyle = '#4A5568';
-                    tempCtx.lineWidth = 2;
-                    tempCtx.stroke();
-                    
-                    // Draw markers, events, and periods on the temp canvas
-                    // This requires replicating the draw functions but with the temp context and export coords
-                    // For simplicity in this example, we'll just re-use the main draw functions after temporarily setting state
-                    // A more robust solution would pass the context and settings to each draw function.
-                    // This is a simplified simulation for demonstration:
-                    const originalState = JSON.parse(JSON.stringify(state));
-                    
-                    state.timelineStart = start;
-                    state.timelineEnd = end;
-                    state.view.zoom = exportZoom;
-                    state.view.panX = 0;
-                    state.view.panY = 0;
-
-                    // Re-calculate layout for the export canvas dimensions
-                    calculateLayout(dateToPx, height, 0);
-
-                    // Re-implement drawing functions for the temporary context
-                    const drawOnTempCanvas = (tempCtx, tempWidth, tempHeight) => {
-                        const tempAxisY = tempHeight / 2;
-                        
-                        // Draw Markers
-                        const interval = getMarkerInterval();
-                        const startYear = Math.floor(pxToDate(0) / interval) * interval;
-                        const endYear = Math.ceil(pxToDate(tempWidth) / interval) * interval;
-                        tempCtx.fillStyle = '#4A5568';
-                        tempCtx.textAlign = 'center';
-                        tempCtx.font = '12px Inter';
-                        for (let year = startYear; year <= endYear; year += interval) {
-                            const x = dateToPx(year);
-                            if (x < 0 || x > tempWidth) continue;
-                            const tickHeight = year % (interval * 10) === 0 ? 15 : 8;
-                            tempCtx.beginPath();
-                            tempCtx.moveTo(x, tempAxisY - tickHeight);
-                            tempCtx.lineTo(x, tempAxisY + tickHeight);
-                            tempCtx.strokeStyle = '#4A5568';
-                            tempCtx.lineWidth = year % (interval * 10) === 0 ? 2 : 1;
-                            tempCtx.stroke();
-                            tempCtx.fillText(year, x, tempAxisY + tickHeight + 15);
-                        }
-
-                        // Draw Events & Periods (using their calculated .y property)
-                        state.events.forEach(event => {
-                            const x = dateToPx(event.date);
-                            tempCtx.beginPath(); tempCtx.moveTo(x, tempAxisY); tempCtx.lineTo(x, event.y); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
-                            tempCtx.beginPath(); tempCtx.arc(x, event.y, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
-                            tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, event.y - 15);
-                        });
-                        state.periods.forEach(period => {
-                            const startX = dateToPx(period.startDate); const endX = dateToPx(period.endDate); const pWidth = endX - startX;
-                            tempCtx.fillStyle = 'rgba(66, 153, 225, 0.7)'; tempCtx.strokeStyle = '#2B6CB0'; tempCtx.lineWidth = 2;
-                            tempCtx.beginPath(); tempCtx.roundRect(startX, period.y, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
-                            tempCtx.fillStyle = 'white'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.textBaseline = 'middle';
-                            tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, period.y, pWidth, 40); tempCtx.clip();
-                            tempCtx.fillText(period.title, startX + pWidth / 2, period.y + 20); tempCtx.restore();
-                        });
-                    };
-
-                    drawOnTempCanvas(tempCtx, width, height);
-
-                    // Restore original state
-                    Object.assign(state, originalState);
-                    requestDraw(); // Redraw main canvas with original state
-
-                    const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-                    const a = document.createElement('a');
-                    a.href = dataUrl;
-                    a.download = 'tidslinje.jpeg';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                } catch (err) {
-                    console.error("Export failed:", err);
-                    alert("En feil oppstod under eksporten.");
-                } finally {
-                    document.getElementById('exportSpinner').style.display = 'none';
-                    document.getElementById('generateJpegBtn').disabled = false;
-                    closeModal(exportJpegSettingsModal);
-                    closeModal(exportModal);
-                }
-            }, 50); // 50ms delay
-        }
+            const showDescriptions = document.getElementById('exportDescriptions').checked;
+            exportJpeg(start, end, width, height, showDescriptions);
+        });
 
         importBtn.addEventListener('click', () => importFileInput.click());
-
         importFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = (event) => {
                 try {
@@ -897,22 +1033,14 @@
                         state.timelineEnd = importedData.timelineEnd;
                         state.events = importedData.events;
                         state.periods = importedData.periods;
-                        
                         startDateInput.value = state.timelineStart;
                         endDateInput.value = state.timelineEnd;
-                        
                         state.images = {};
                         [...state.events, ...state.periods].forEach(loadImage);
-
                         const totalYears = state.timelineEnd - state.timelineStart;
                         state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
-                        state.view.panX = 0;
-                        state.view.panY = 0;
-
-                        requestDraw();
-                    } else {
-                        throw new Error('Invalid timeline file format.');
-                    }
+                        state.view.panX = 0; state.view.panY = 0; requestDraw();
+                    } else { throw new Error('Invalid timeline file format.'); }
                 } catch (err) {
                     alert('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format.');
                     console.error(err);
