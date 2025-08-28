@@ -84,23 +84,13 @@
         </h1>
         
         <div class="flex items-center gap-4 flex-wrap">
-            <!-- Date Range Controls -->
-            <div class="flex items-center gap-2 flex-wrap border-r pr-4">
+            <!-- Date Range Display -->
+            <div class="flex items-center gap-2 flex-wrap">
                 <label for="startDate" class="text-sm font-medium">Fra år...</label>
-                <input type="number" id="startDate" value="1990" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                <input type="number" id="startDate" value="-2000" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                 <label for="endDate" class="text-sm font-medium">...til år.</label>
-                <input type="number" id="endDate" value="2030" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                <button id="setDateRange" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm font-semibold">Vis disse årene</button>
-            </div>
-             <!-- Zoom Sensitivity -->
-            <div class="flex items-center gap-2">
-                <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå:</label>
-                <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="1" class="w-24">
-            </div>
-             <!-- Show Descriptions Toggle -->
-            <div class="flex items-center gap-2 border-l pl-4">
-                <label for="showDescriptionsToggle" class="text-sm font-medium cursor-pointer">Vis beskrivelser</label>
-                <input type="checkbox" id="showDescriptionsToggle" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer">
+                <input type="number" id="endDate" value="2026" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                <button id="setDateRangeBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm font-semibold">Sett tidsrom</button>
             </div>
         </div>
 
@@ -118,6 +108,27 @@
     <!-- Main Content: Canvas -->
     <main class="flex-grow relative">
         <canvas id="timelineCanvas"></canvas>
+        
+        <!-- Bottom Controls -->
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white bg-opacity-80 backdrop-blur-sm p-3 rounded-lg shadow-lg z-20 flex items-center gap-6 opacity-70 hover:opacity-100 transition-opacity duration-300">
+            <!-- Zoom Level -->
+            <div class="flex items-center gap-2">
+                <label for="zoomLevel" class="text-sm font-medium">Zoom</label>
+                <input type="range" id="zoomLevel" min="0" max="100" value="0" class="w-48">
+            </div>
+
+            <!-- Detail Level -->
+            <div class="flex items-center gap-2">
+                <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå</label>
+                <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="1" class="w-48">
+            </div>
+
+            <!-- Show Descriptions Toggle -->
+            <div class="flex items-center gap-2 pl-4 border-l">
+                <label for="showDescriptionsToggle" class="text-sm font-medium cursor-pointer">Vis beskrivelser</label>
+                <input type="checkbox" id="showDescriptionsToggle" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer">
+            </div>
+        </div>
     </main>
 
     <!-- Modals -->
@@ -154,8 +165,8 @@
                 </div>
                 <div class="mb-4">
                     <label for="eventDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
-                    <textarea id="eventDesc" rows="3" maxlength="200" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
-                    <div id="eventCharCount" class="text-right text-sm text-gray-500 mt-1">0 / 200</div>
+                    <textarea id="eventDesc" rows="3" maxlength="120" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    <div id="eventCharCount" class="text-right text-sm text-gray-500 mt-1">0 / 120</div>
                 </div>
                 <div class="flex gap-4">
                     <div class="mb-4 flex-grow">
@@ -205,8 +216,8 @@
                 </div>
                 <div class="mb-4">
                     <label for="periodDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
-                    <textarea id="periodDesc" rows="3" maxlength="250" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
-                    <div id="periodCharCount" class="text-right text-sm text-gray-500 mt-1">0 / 250</div>
+                    <textarea id="periodDesc" rows="3" maxlength="120" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    <div id="periodCharCount" class="text-right text-sm text-gray-500 mt-1">0 / 120</div>
                 </div>
                  <div class="flex gap-4">
                     <div class="mb-4 flex-grow">
@@ -301,10 +312,11 @@
         const ctx = canvas.getContext('2d');
         const startDateInput = document.getElementById('startDate');
         const endDateInput = document.getElementById('endDate');
-        const setDateRangeBtn = document.getElementById('setDateRange');
+        const setDateRangeBtn = document.getElementById('setDateRangeBtn');
         const zoomSensitivitySlider = document.getElementById('zoomSensitivity');
         const clearAllBtn = document.getElementById('clearAllBtn');
         const showDescriptionsToggle = document.getElementById('showDescriptionsToggle');
+        const zoomLevelSlider = document.getElementById('zoomLevel');
         
         // Modals
         const detailsModal = document.getElementById('detailsModal');
@@ -321,18 +333,26 @@
         const importBtn = document.getElementById('importBtn');
         const importFileInput = document.getElementById('importFile');
         
+        let MIN_ZOOM_LEVEL = null;
+        const MASTER_TIMELINE_START = -2000;
+        const MASTER_TIMELINE_END = 2026;
+
         // --- State Management ---
         let state = {
-            timelineStart: 1990,
-            timelineEnd: 2030,
             events: [],
             periods: [],
             view: {
+                start: MASTER_TIMELINE_START,
+                end: MASTER_TIMELINE_END,
                 zoom: 1, // pixels per year
                 panX: 0,
                 panY: 0,
                 markerDensity: 1,
                 showDescriptions: false,
+                edgeIndicators: {
+                    leftAnim: 0, // 0 (hidden) to 1 (visible)
+                    rightAnim: 0,
+                }
             },
             images: {}, // Cache for loaded images
             dragging: {
@@ -360,9 +380,6 @@
         const LOCAL_STORAGE_KEY = 'timelineData';
         const saveState = () => {
             const dataToSave = {
-                timelineStart: state.timelineStart,
-                timelineEnd: state.timelineEnd,
-                // Remove calculated layout properties before saving
                 events: state.events.map(({lane, y, height, descriptionLines, ...rest}) => rest),
                 periods: state.periods.map(({lane, y, height, descriptionLines, ...rest}) => rest),
             };
@@ -375,16 +392,9 @@
             if (savedData) {
                 try {
                     const parsedData = JSON.parse(savedData);
-                    state.timelineStart = parsedData.timelineStart;
-                    state.timelineEnd = parsedData.timelineEnd;
-                    state.events = parsedData.events;
-                    state.periods = parsedData.periods;
-                    
-                    startDateInput.value = state.timelineStart;
-                    endDateInput.value = state.timelineEnd;
-                    
+                    state.events = parsedData.events || [];
+                    state.periods = parsedData.periods || [];
                     [...state.events, ...state.periods].forEach(loadImage);
-                    
                     console.log('Tidslinje lastet fra lagring.');
                     return true;
                 } catch (e) {
@@ -406,9 +416,24 @@
             requestDraw();
         }
 
-        // --- Coordinate Conversion ---
-        const dateToPx = (date) => (date - state.timelineStart) * state.view.zoom + state.view.panX;
-        const pxToDate = (px) => (px - state.view.panX) / state.view.zoom + state.timelineStart;
+        // --- Coordinate Conversion & Clamping ---
+        const dateToPx = (date) => (date - state.view.start) * state.view.zoom + state.view.panX;
+        const pxToDate = (px) => (px - state.view.panX) / state.view.zoom + state.view.start;
+
+        function clampPanX() {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            const timelinePixelWidth = (state.view.end - state.view.start) * state.view.zoom;
+
+            const minPanX = canvasWidth - timelinePixelWidth;
+            const maxPanX = 0;
+            
+            if (timelinePixelWidth < canvasWidth) {
+                 state.view.panX = (canvasWidth - timelinePixelWidth) / 2;
+            } else {
+                 state.view.panX = Math.max(minPanX, Math.min(state.view.panX, maxPanX));
+            }
+        }
 
         // --- Layout & Drawing ---
         let drawQueued = false;
@@ -418,6 +443,7 @@
                 requestAnimationFrame(() => {
                     const dpr = window.devicePixelRatio || 1;
                     const viewHeight = canvas.height / dpr;
+                    updateAnimations();
                     calculateLayout(dateToPx, viewHeight, state.view.panY);
                     draw();
                     drawQueued = false;
@@ -425,15 +451,46 @@
             }
         }
 
+        function easeOutCubic(t) {
+            return (--t) * t * t + 1;
+        }
+
+        function updateAnimations() {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            const startX = dateToPx(state.view.start);
+            const endX = dateToPx(state.view.end);
+            const animSpeed = 0.05;
+
+            // Show only when zoomed in significantly
+            const showLeft = startX >= -10 && state.view.zoom > MIN_ZOOM_LEVEL * 10;
+            const showRight = endX <= canvasWidth + 10 && state.view.zoom > MIN_ZOOM_LEVEL * 10;
+
+            if (showLeft) {
+                state.view.edgeIndicators.leftAnim = Math.min(1, state.view.edgeIndicators.leftAnim + animSpeed);
+            } else {
+                state.view.edgeIndicators.leftAnim = Math.max(0, state.view.edgeIndicators.leftAnim - animSpeed);
+            }
+
+            if (showRight) {
+                state.view.edgeIndicators.rightAnim = Math.min(1, state.view.edgeIndicators.rightAnim + animSpeed);
+            } else {
+                state.view.edgeIndicators.rightAnim = Math.max(0, state.view.edgeIndicators.rightAnim - animSpeed);
+            }
+            
+            if ((state.view.edgeIndicators.leftAnim > 0 && state.view.edgeIndicators.leftAnim < 1) ||
+                (state.view.edgeIndicators.rightAnim > 0 && state.view.edgeIndicators.rightAnim < 1)) {
+                requestDraw();
+            }
+        }
+
         function getDynamicFontSize(lineCount) {
             const baseSize = 12;
             const minSize = 6;
             const maxLines = 10;
-            const scaleThreshold = 20; // At this many lines, font is at its minimum size
+            const scaleThreshold = 20;
 
-            if (lineCount <= maxLines) {
-                return baseSize;
-            }
+            if (lineCount <= maxLines) return baseSize;
             
             const scale = Math.max(0, (scaleThreshold - lineCount) / (scaleThreshold - maxLines));
             return minSize + (baseSize - minSize) * scale;
@@ -444,7 +501,6 @@
             const skylineUp = []; 
             const skylineDown = [];
 
-            // --- Event Layout (Skyline Up) ---
             const sortedEvents = [...state.events].sort((a, b) => a.date - b.date);
             sortedEvents.forEach(event => {
                 const eventX = coordFn(event.date);
@@ -461,11 +517,7 @@
                 
                 let boxHeight = 0;
                 if (state.view.showDescriptions && (event.description || event.img)) {
-                    const titleHeight = 20;
-                    const padding = 10;
-                    let descHeight = 0;
-                    let imgHeight = 0;
-
+                    const titleHeight = 20; const padding = 10; let descHeight = 0; let imgHeight = 0;
                     if (event.description) {
                         const lines = wrapText(context, event.description, boxWidth - padding * 2);
                         event.descriptionLines = lines;
@@ -475,9 +527,7 @@
                     } else {
                         event.descriptionLines = [];
                     }
-                    if (event.img) {
-                        imgHeight = 50 + (event.description ? padding : 0);
-                    }
+                    if (event.img) imgHeight = 50 + (event.description ? padding : 0);
                     boxHeight = titleHeight + descHeight + imgHeight + padding * 2;
                 }
                 event.height = boxHeight;
@@ -490,13 +540,8 @@
                 for (const segment of skylineUp) {
                     if (segment.endX <= startX) newSkyline.push(segment);
                     else {
-                        if (!added) {
-                            newSkyline.push({ startX: startX, endX: endX, topY: newTopY });
-                            added = true;
-                        }
-                        if (segment.endX > endX) {
-                           newSkyline.push({startX: endX, endX: segment.endX, topY: segment.topY});
-                        }
+                        if (!added) { newSkyline.push({ startX: startX, endX: endX, topY: newTopY }); added = true; }
+                        if (segment.endX > endX) newSkyline.push({startX: endX, endX: segment.endX, topY: segment.topY});
                     }
                 }
                 if (!added) newSkyline.push({ startX: startX, endX: endX, topY: newTopY });
@@ -504,8 +549,6 @@
                 Array.prototype.push.apply(skylineUp, newSkyline.sort((a, b) => a.startX - b.startX));
             });
 
-
-            // --- Period Layout (Skyline Down) ---
             const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
@@ -524,10 +567,7 @@
                 
                 period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
 
-                const titleHeight = 20;
-                const paddingY = 10;
-                let descriptionHeight = 0;
-                let imageHeight = 0;
+                const titleHeight = 20; const paddingY = 10; let descriptionHeight = 0; let imageHeight = 0;
                 
                 if (state.view.showDescriptions && period.description) {
                     const width = endX - startX;
@@ -553,13 +593,8 @@
                 for (const segment of skylineDown) {
                     if (segment.endX <= startX) newSkyline.push(segment);
                     else {
-                        if (!added) {
-                            newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
-                            added = true;
-                        }
-                        if (segment.endX > endX) {
-                           newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
-                        }
+                        if (!added) { newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY }); added = true; }
+                        if (segment.endX > endX) newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
                     }
                 }
                 if (!added) newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
@@ -587,6 +622,94 @@
             drawEvents(ctx, dateToPx, state.events, state.images, axisY, state.view.showDescriptions);
             drawCreationRect();
             drawHoverIndicator();
+            drawEdgeIndicators();
+        }
+
+        function drawEdgeIndicators() {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            const animLeft = easeOutCubic(state.view.edgeIndicators.leftAnim);
+            const animRight = easeOutCubic(state.view.edgeIndicators.rightAnim);
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(113, 128, 150, 0.8)'; // gray-600 with alpha
+            ctx.strokeStyle = 'rgba(113, 128, 150, 0.8)';
+            ctx.lineWidth = 1.5;
+
+            // --- Left Side (Past) ---
+            if (animLeft > 0) {
+                const leftTexts = [
+                    { title: "Universet oppstår", date: "(ca. 13.8 mrd. år fvt.)" },
+                    { title: "Jorda oppstår", date: "(ca. 4.5 mrd. år fvt.)" },
+                    { title: "Liv oppstår", date: "(ca. 3.7 mrd. år fvt.)" },
+                    { title: "Pattedyr oppstår", date: "(ca. 225 mill. år fvt.)" },
+                    { title: "Homo Sapiens oppstår", date: "(ca. 300 000 år fvt.)" },
+                    { title: "Kognitiv Revolusjon", date: "(ca. 50 000 år fvt.)" },
+                    { title: "Jordbruksrevolusjon", date: "(ca. 10 000 år fvt.)" },
+                ];
+                
+                const startX = -300;
+                const endX = 15;
+                const currentX = startX + (endX - startX) * animLeft;
+                const arrowY = 40;
+                
+                ctx.globalAlpha = animLeft;
+                ctx.beginPath();
+                ctx.moveTo(currentX + 15, arrowY);
+                ctx.lineTo(currentX, arrowY);
+                ctx.moveTo(currentX, arrowY);
+                ctx.lineTo(currentX + 6, arrowY - 5);
+                ctx.moveTo(currentX, arrowY);
+                ctx.lineTo(currentX + 6, arrowY + 5);
+                ctx.stroke();
+
+                ctx.textAlign = 'left';
+                let currentY = arrowY + 20;
+                leftTexts.forEach(item => {
+                    ctx.font = 'bold 10px Inter';
+                    ctx.fillText(item.title, currentX + 25, currentY);
+                    ctx.font = '8px Inter';
+                    ctx.fillText(item.date, currentX + 25, currentY + 11);
+                    currentY += 28;
+                });
+            }
+
+            // --- Right Side (Future) ---
+            if (animRight > 0) {
+                const rightTexts = [
+                    { title: "Pangea Ultima dannes", date: "(Ca. 250 mill. år)" },
+                    { title: "Havene fordamper", date: "(ca. 1 mrd. år)" },
+                    { title: "Solen starter å dø", date: "(ca. 5 mrd. år)" },
+                    { title: "Bare svarte hull gjenstår", date: "(ca. 100 trillioner år)" },
+                ];
+
+                const startX = canvasWidth + 300;
+                const endX = canvasWidth - 15;
+                const currentX = startX + (endX - startX) * animRight;
+                const arrowY = 40;
+
+                ctx.globalAlpha = animRight;
+                ctx.beginPath();
+                ctx.moveTo(currentX - 15, arrowY);
+                ctx.lineTo(currentX, arrowY);
+                ctx.moveTo(currentX, arrowY);
+                ctx.lineTo(currentX - 6, arrowY - 5);
+                ctx.moveTo(currentX, arrowY);
+                ctx.lineTo(currentX - 6, arrowY + 5);
+                ctx.stroke();
+
+                ctx.textAlign = 'right';
+                let currentY = arrowY + 20;
+                rightTexts.forEach(item => {
+                    ctx.font = 'bold 10px Inter';
+                    ctx.fillText(item.title, currentX - 25, currentY);
+                    ctx.font = '8px Inter';
+                    ctx.fillText(item.date, currentX - 25, currentY + 11);
+                    currentY += 28;
+                });
+            }
+
+            ctx.restore();
         }
 
         function drawHoverIndicator() {
@@ -801,18 +924,62 @@
 
         // --- Event Handlers ---
         setDateRangeBtn.addEventListener('click', () => {
-            const start = parseInt(startDateInput.value, 10);
-            const end = parseInt(endDateInput.value, 10);
-            if (!isNaN(start) && !isNaN(end) && start < end) {
-                state.timelineStart = start;
-                state.timelineEnd = end;
-                const totalYears = state.timelineEnd - state.timelineStart;
-                state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
-                state.view.panX = 0; state.view.panY = 0; requestDraw();
-                saveState();
-            } else {
-                showConfirm('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.', () => {}, true);
+            let start = parseInt(startDateInput.value, 10);
+            let end = parseInt(endDateInput.value, 10);
+
+            if (isNaN(start) || isNaN(end) || start >= end) {
+                showConfirm('Vennligst skriv inn et gyldig start- og sluttår.', () => {}, true);
+                return;
             }
+
+            // Clamp to master range
+            start = Math.max(MASTER_TIMELINE_START, start);
+            end = Math.min(MASTER_TIMELINE_END, end);
+            startDateInput.value = start;
+            endDateInput.value = end;
+            
+            state.view.start = start;
+            state.view.end = end;
+            
+            updateViewForNewRange();
+        });
+
+        function updateViewForNewRange() {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            const totalYears = state.view.end - state.view.start;
+            
+            MIN_ZOOM_LEVEL = canvasWidth / (totalYears * 1.1);
+            state.view.zoom = MIN_ZOOM_LEVEL;
+            state.view.panX = 0;
+            clampPanX();
+            updateZoomSlider();
+            requestDraw();
+        }
+
+        function updateZoomSlider() {
+            if (!zoomLevelSlider || !MIN_ZOOM_LEVEL) return;
+            const maxZoom = 100;
+            const sliderValue = 100 * Math.log(state.view.zoom / MIN_ZOOM_LEVEL) / Math.log(maxZoom / MIN_ZOOM_LEVEL);
+            zoomLevelSlider.value = Math.max(0, sliderValue);
+        }
+
+        zoomLevelSlider.addEventListener('input', (e) => {
+            const sliderValue = parseFloat(e.target.value); // 0-100
+            if (!MIN_ZOOM_LEVEL) return;
+            const maxZoom = 100;
+
+            const newZoom = MIN_ZOOM_LEVEL * Math.pow(maxZoom / MIN_ZOOM_LEVEL, sliderValue / 100);
+
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            const dateAtCenter = pxToDate(canvasWidth / 2);
+
+            state.view.zoom = newZoom;
+            state.view.panX = (canvasWidth / 2) - (dateAtCenter - state.view.start) * state.view.zoom;
+            
+            clampPanX();
+            requestDraw();
         });
 
         zoomSensitivitySlider.addEventListener('input', (e) => {
@@ -832,8 +999,16 @@
             const mouseX = e.clientX - rect.left;
             const zoomFactor = 1.1;
             const dateAtMouse = pxToDate(mouseX);
-            if (e.deltaY < 0) { state.view.zoom *= zoomFactor; } else { state.view.zoom /= zoomFactor; }
-            state.view.panX = mouseX - (dateAtMouse - state.timelineStart) * state.view.zoom;
+            
+            let newZoom = state.view.zoom;
+            if (e.deltaY < 0) { newZoom *= zoomFactor; } 
+            else { newZoom /= zoomFactor; }
+            
+            state.view.zoom = Math.max(MIN_ZOOM_LEVEL, newZoom);
+            state.view.panX = mouseX - (dateAtMouse - state.view.start) * state.view.zoom;
+            
+            clampPanX();
+            updateZoomSlider();
             requestDraw();
         });
 
@@ -845,15 +1020,15 @@
             state.dragging.isDown = true;
             state.dragging.startX = e.clientX;
             state.dragging.startY = e.clientY;
-            state.dragging.lastX = e.clientX; // For calculating move deltas
-            state.dragging.lastY = e.clientY; // For calculating move deltas
+            state.dragging.lastX = e.clientX;
+            state.dragging.lastY = e.clientY;
             state.dragging.scrollLeft = state.view.panX;
             state.dragging.scrollTop = state.view.panY;
 
             const item = getPeriodAt(mouseX, mouseY) || getEventAt(mouseX, mouseY);
             const axisY = (canvas.height / window.devicePixelRatio / 2) + state.view.panY;
             const distFromAxis = Math.abs(mouseY - axisY);
-            const actionZoneThreshold = 50; // pixels from axis to allow creation
+            const actionZoneThreshold = 50;
 
             if (item) {
                 state.dragging.activeItem = item;
@@ -894,7 +1069,7 @@
                     const rect = state.dragging.creationRect;
                     const startDate = pxToDate(Math.min(rect.startX, rect.endX));
                     const endDate = pxToDate(Math.max(rect.startX, rect.endX));
-                    if (endDate - startDate > 0.1) { // Ensure it's not just a click
+                    if (endDate - startDate > 0.1) {
                         openPeriodModal(null, { startDate, endDate });
                     }
                 }
@@ -952,6 +1127,7 @@
                     const dy = e.clientY - state.dragging.startY;
                     state.view.panX = state.dragging.scrollLeft + dx;
                     state.view.panY = state.dragging.scrollTop + dy;
+                    clampPanX();
                 }
             } else {
                 const item = getPeriodAt(mouseX, mouseY) || getEventAt(mouseX, mouseY);
@@ -1106,7 +1282,7 @@
             const descTextarea = document.getElementById('eventDesc');
 
             const updateCharCount = () => {
-                charCount.textContent = `${descTextarea.value.length} / 200`;
+                charCount.textContent = `${descTextarea.value.length} / 120`;
             };
             descTextarea.addEventListener('input', updateCharCount);
 
@@ -1139,7 +1315,7 @@
             const descTextarea = document.getElementById('periodDesc');
             
             const updateCharCount = () => {
-                charCount.textContent = `${descTextarea.value.length} / 250`;
+                charCount.textContent = `${descTextarea.value.length} / 120`;
             };
             descTextarea.addEventListener('input', updateCharCount);
 
@@ -1223,8 +1399,6 @@
         
         function getTimelineData() {
             return {
-                timelineStart: state.timelineStart,
-                timelineEnd: state.timelineEnd,
                 events: state.events.map(({lane, y, height, descriptionLines, ...rest}) => rest),
                 periods: state.periods.map(({lane, y, height, descriptionLines, ...rest}) => rest),
             };
@@ -1234,7 +1408,7 @@
         
         function getTimelineBounds() {
             if (state.events.length === 0 && state.periods.length === 0) {
-                return { min: state.timelineStart, max: state.timelineEnd };
+                return { min: state.view.start, max: state.view.end };
             }
             const eventDates = state.events.map(e => e.date);
             const periodStartDates = state.periods.map(p => p.startDate);
@@ -1264,10 +1438,7 @@
             updateCalculatedExportHeight();
             openModal(exportJpegSettingsModal);
         });
-
-        // =====================================================================
-        // === THIS IS THE CORRECTED FUNCTION FOR EXPORT LAYOUT ===
-        // =====================================================================
+        
         function getExportLayout(start, end, width, showDescriptions) {
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
@@ -1275,10 +1446,9 @@
             const dateToPxExport = (date) => (date - start) * (width / (end - start));
 
             const layout = { events: [], periods: [] };
-            const topPadding = 30; // Space at the very top of the image
+            const topPadding = 30;
             const vSpacing = 15;
 
-            // --- 1. Calculate relative event layout (positions are relative to a baseline of 0) ---
             const skylineUp = [];
             const sortedEvents = JSON.parse(JSON.stringify(state.events)).sort((a, b) => a.date - b.date);
             
@@ -1288,8 +1458,7 @@
                 const startX = eventX - boxWidth / 2;
                 const endX = eventX + boxWidth / 2;
 
-                // Start from a baseline of 0, going upwards (negative y)
-                let lowestY = -30; // Initial position for events, relative to axis
+                let lowestY = -30;
                 for (const segment of skylineUp) {
                     if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
                         lowestY = Math.min(lowestY, segment.topY);
@@ -1310,12 +1479,9 @@
                     boxHeight = titleHeight + descHeight + imgHeight + padding * 2;
                 }
                 event.height = boxHeight;
-                // Store the relative Y position
                 event.y = lowestY - (boxHeight > 0 ? boxHeight + vSpacing : 0); 
-                
                 const newTopY = event.y - vSpacing;
                 
-                // Update skyline (same logic as before)
                 const newSkyline = []; let added = false;
                 for (const segment of skylineUp) {
                     if (segment.endX <= startX) newSkyline.push(segment);
@@ -1330,20 +1496,14 @@
                 layout.events.push(event);
             });
 
-            // --- 2. Find the topmost point and calculate the necessary offset ---
             const minEventY = layout.events.reduce((min, e) => Math.min(min, e.y), 0);
             const yOffset = topPadding - minEventY;
-
-            // --- 3. Set the final axis position and adjust all event Y coordinates ---
             const axisY = yOffset;
-            layout.events.forEach(e => {
-                e.y += yOffset;
-            });
+            layout.events.forEach(e => { e.y += yOffset; });
 
-            // --- 4. Period Layout (now using the correct axisY) ---
             const skylineDown = [];
             const sortedPeriods = JSON.parse(JSON.stringify(state.periods)).sort((a, b) => a.startDate - b.startDate);
-            let maxPeriodY = axisY + 30; // Start below the axis
+            let maxPeriodY = axisY + 30;
 
             sortedPeriods.forEach(period => {
                 const startX = dateToPxExport(period.startDate);
@@ -1378,7 +1538,6 @@
                 const newBottomY = period.y + period.height + vSpacing;
                 maxPeriodY = Math.max(maxPeriodY, newBottomY);
                 
-                // Update skyline (same logic as before)
                 const newSkyline = []; let added = false;
                 for (const segment of skylineDown) {
                     if (segment.endX <= startX) newSkyline.push(segment);
@@ -1470,16 +1629,14 @@
         function drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end, showDescriptions) {
             const dateToPxFn = (date) => (date - start) * (width / (end - start));
             
-            // Draw Axis & Markers
             tempCtx.beginPath(); tempCtx.moveTo(0, axisY); tempCtx.lineTo(width, axisY); tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = 2; tempCtx.stroke();
             
             const tempState = { view: { zoom: width / (end - start), markerDensity: 1 } };
             const tempPxToDate = (px) => (px / tempState.view.zoom) + start;
             
-            // A bit of a hack to reuse getMarkerInterval without refactoring it
             const interval = getMarkerInterval.call({
                 state: tempState, 
-                canvas: {width: width / 1, getBoundingClientRect: () => ({left:0})}, // use DPR of 1 for export
+                canvas: {width: width / 1, getBoundingClientRect: () => ({left:0})},
                 pxToDate: tempPxToDate
             });
 
@@ -1495,7 +1652,6 @@
                 tempCtx.fillText(year, x, axisY + tickHeight + 15);
             }
             
-            // Draw items using the main drawing functions, but passing the export context and layout data
             drawEvents(tempCtx, dateToPxFn, layout.events, state.images, axisY, showDescriptions);
             drawPeriods(tempCtx, dateToPxFn, layout.periods, state.images, showDescriptions);
         }
@@ -1536,19 +1692,7 @@
                     if (importedData.events && importedData.periods) {
                         state.events.push(...importedData.events);
                         state.periods.push(...importedData.periods);
-                        
-                        const bounds = getTimelineBounds();
-                        state.timelineStart = Math.floor(bounds.min);
-                        state.timelineEnd = Math.ceil(bounds.max);
-
-                        startDateInput.value = state.timelineStart;
-                        endDateInput.value = state.timelineEnd;
-                        
                         [...importedData.events, ...importedData.periods].forEach(loadImage);
-                        
-                        const totalYears = state.timelineEnd - state.timelineStart;
-                        state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
-                        state.view.panX = 0; state.view.panY = 0; 
                         requestDraw();
                         saveState();
                     } else { throw new Error('Invalid timeline file format.'); }
@@ -1591,11 +1735,28 @@
         }
 
         // --- Initial Setup ---
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-        if (!loadState()) {
-            setDateRangeBtn.click();
+        function initializeView() {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            const totalYears = state.view.end - state.view.start;
+            
+            MIN_ZOOM_LEVEL = canvasWidth / (totalYears * 1.1);
+            state.view.zoom = MIN_ZOOM_LEVEL;
+            state.view.panX = 0;
+            state.view.panY = 0;
+            clampPanX();
+            updateZoomSlider();
+            requestDraw();
         }
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            updateViewForNewRange();
+        });
+        
+        loadState();
+        resizeCanvas();
+        initializeView();
     });
     </script>
 </body>
