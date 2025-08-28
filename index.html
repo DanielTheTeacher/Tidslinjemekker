@@ -79,7 +79,7 @@
     <!-- Header & Controls -->
     <header class="bg-white shadow-md p-2 md:p-4 flex flex-wrap items-center justify-between gap-4 z-10">
         <h1 class="text-xl md:text-2xl font-bold text-gray-700 flex items-center gap-2">
-            <img src="logo.png" alt="Timeline Logo" class="w-7 h-7 rounded-full object-cover">
+            <img src="https://placehold.co/40x40/6366f1/ffffff?text=DT" alt="Timeline Logo" class="w-7 h-7 rounded-full object-cover">
             Daniels tidslinje-mekker
         </h1>
         
@@ -109,6 +109,16 @@
     <main class="flex-grow relative">
         <canvas id="timelineCanvas"></canvas>
         
+        <!-- IMPROVED: Mini Navigator -->
+        <div id="miniNavigator" class="absolute top-4 right-4 bg-white bg-opacity-90 backdrop-blur-sm p-2 rounded-lg shadow-lg z-20 w-64 flex flex-col gap-2">
+             <div class="flex items-center gap-2">
+                <label for="jumpToYear" class="text-xs font-medium whitespace-nowrap">Gå til:</label>
+                <input type="number" id="jumpToYear" class="w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs">
+                <button id="jumpToYearBtn" class="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-xs font-semibold">Gå</button>
+            </div>
+            <canvas id="miniCanvas" class="w-full h-16 rounded cursor-pointer border border-gray-200"></canvas>
+        </div>
+
         <!-- Bottom Controls -->
         <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white bg-opacity-80 backdrop-blur-sm p-3 rounded-lg shadow-lg z-20 flex items-center gap-6 opacity-70 hover:opacity-100 transition-opacity duration-300">
             <!-- Zoom Level -->
@@ -318,6 +328,12 @@
         const showDescriptionsToggle = document.getElementById('showDescriptionsToggle');
         const zoomLevelSlider = document.getElementById('zoomLevel');
         
+        // --- Mini Navigator Elements ---
+        const miniCanvas = document.getElementById('miniCanvas');
+        const miniCtx = miniCanvas.getContext('2d');
+        const jumpToYearInput = document.getElementById('jumpToYear');
+        const jumpToYearBtn = document.getElementById('jumpToYearBtn');
+
         // Modals
         const detailsModal = document.getElementById('detailsModal');
         const eventModal = document.getElementById('eventModal');
@@ -336,6 +352,8 @@
         let MIN_ZOOM_LEVEL = null;
         const MASTER_TIMELINE_START = -2000;
         const MASTER_TIMELINE_END = 2026;
+        const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Des"];
+        const MONTH_ZOOM_THRESHOLD = 200; // Pixels per year to show months
 
         // --- State Management ---
         let state = {
@@ -368,6 +386,7 @@
                 creationRect: null, // For drag-to-create-period
                 targetPeriod: null, // For reordering
             },
+            miniNavDragging: false,
             mouse: {
                 x: 0,
                 y: 0,
@@ -415,7 +434,17 @@
             canvas.style.width = `${canvas.parentElement.clientWidth}px`;
             canvas.style.height = `${canvas.parentElement.clientHeight}px`;
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            
+            resizeMiniCanvas();
             requestDraw();
+        }
+
+        function resizeMiniCanvas() {
+            miniCanvas.width = miniCanvas.clientWidth * window.devicePixelRatio;
+            miniCanvas.height = miniCanvas.clientHeight * window.devicePixelRatio;
+            miniCanvas.style.width = `${miniCanvas.clientWidth}px`;
+            miniCanvas.style.height = `${miniCanvas.clientHeight}px`;
+            miniCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
         }
 
         // --- Coordinate Conversion & Clamping ---
@@ -448,6 +477,7 @@
                     updateAnimations();
                     calculateLayout(dateToPx, viewHeight, state.view.panY);
                     draw();
+                    drawMiniNavigator();
                     drawQueued = false;
                 });
             }
@@ -460,13 +490,16 @@
         function updateAnimations() {
             const dpr = window.devicePixelRatio || 1;
             const canvasWidth = canvas.width / dpr;
-            const startX = dateToPx(state.view.start);
-            const endX = dateToPx(state.view.end);
             const animSpeed = 0.05;
 
-            const showLeft = startX >= -10 && state.view.zoom > MIN_ZOOM_LEVEL * 3;
-            const showRight = endX <= canvasWidth + 10 && state.view.zoom > MIN_ZOOM_LEVEL * 3;
+            // --- IMPROVEMENT: Edge indicator sensitivity reduced ---
+            const masterStartX = dateToPx(MASTER_TIMELINE_START);
+            const masterEndX = dateToPx(MASTER_TIMELINE_END);
+            const sensitivity = 50; // Reduced from 200
 
+            const showLeft = masterStartX >= -sensitivity;
+            const showRight = masterEndX <= canvasWidth + sensitivity;
+            
             if (showLeft) {
                 state.view.edgeIndicators.leftAnim = Math.min(1, state.view.edgeIndicators.leftAnim + animSpeed);
             } else {
@@ -552,14 +585,12 @@
 
             const sortedPeriods = [...state.periods].sort((a, b) => (a.renderOrder || 0) - (b.renderOrder || 0));
             
-            // Pass 1: Calculate heights and assign lanes
-            const lanes = []; // array of arrays of periods
+            const lanes = [];
             
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
                 const endX = coordFn(period.endDate);
                 
-                // Calculate period height
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 const yearRangeHeight = 10;
                 
@@ -605,7 +636,6 @@
                 lanes[assignedLaneIndex].push(period);
             });
 
-            // Pass 2: Calculate lane heights and set y positions
             const laneHeights = lanes.map(lane => {
                 if (lane.length === 0) return 0;
                 return Math.max(...lane.map(p => p.height));
@@ -623,7 +653,7 @@
         }
 
         function drawHoverYearIndicator() {
-            if (!state.mouse.hoverDetail || state.dragging.isDown) return;
+            if (!state.mouse.hoverDetail || (state.dragging.isDown && state.dragging.dragType !== 'create')) return;
 
             const detail = state.mouse.hoverDetail;
             if (detail.type === 'period-edge') {
@@ -631,22 +661,20 @@
                 const year = detail.side === 'left' ? period.startDate : period.endDate;
                 const text = formatYear(year);
                 const x = detail.side === 'left' ? dateToPx(period.startDate) : dateToPx(period.endDate);
-                const y = period.y - 12; // Position it above the period
+                const y = period.y - 12;
 
                 ctx.save();
                 ctx.font = 'bold 12px Inter';
                 const textMetrics = ctx.measureText(text);
                 const textWidth = textMetrics.width;
-                const textHeight = 12; // Approximate height
+                const textHeight = 12;
                 const padding = 6;
 
-                // Draw background
-                ctx.fillStyle = 'rgba(45, 55, 72, 0.85)'; // gray-800 with alpha
+                ctx.fillStyle = 'rgba(45, 55, 72, 0.85)';
                 ctx.beginPath();
                 ctx.roundRect(x - textWidth / 2 - padding, y - textHeight / 2 - padding, textWidth + padding * 2, textHeight + padding * 2, 4);
                 ctx.fill();
 
-                // Draw text
                 ctx.fillStyle = 'white';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -684,11 +712,10 @@
             const animRight = easeOutCubic(state.view.edgeIndicators.rightAnim);
 
             ctx.save();
-            ctx.fillStyle = 'rgba(113, 128, 150, 0.8)'; // gray-600 with alpha
+            ctx.fillStyle = 'rgba(113, 128, 150, 0.8)';
             ctx.strokeStyle = 'rgba(113, 128, 150, 0.8)';
             ctx.lineWidth = 1.5;
 
-            // --- Left Side (Past) ---
             if (animLeft > 0) {
                 const leftTexts = [
                     { title: "Universet oppstår", date: "(ca. 13.8 mrd. år fvt.)" },
@@ -726,7 +753,6 @@
                 });
             }
 
-            // --- Right Side (Future) ---
             if (animRight > 0) {
                 const rightTexts = [
                     { title: "Pangea Ultima dannes", date: "(Ca. 250 mill. år)" },
@@ -765,14 +791,15 @@
         }
 
         function drawHoverIndicator() {
-            if (state.dragging.isDown || state.mouse.isOverItem) return;
+            if ((state.dragging.isDown && state.dragging.dragType !== 'create') || (!state.dragging.isDown && state.mouse.isOverItem)) {
+                return;
+            }
             const dpr = window.devicePixelRatio || 1;
             const canvasHeight = canvas.height / dpr;
             const axisY = (canvasHeight / 2) + state.view.panY;
             const x = state.mouse.x;
             const y = axisY - 30;
 
-            // Draw top ghost line and circle
             ctx.globalAlpha = 0.5;
             ctx.beginPath(); 
             ctx.moveTo(x, axisY); 
@@ -786,15 +813,13 @@
             ctx.fillStyle = '#A0AEC0'; 
             ctx.fill();
 
-            // Draw bottom ghost line
             ctx.beginPath();
             ctx.moveTo(x, axisY);
             ctx.lineTo(x, canvasHeight);
             ctx.stroke();
 
-            // Draw year text
-            const year = Math.round(pxToDate(x));
-            const yearText = formatYear(year);
+            const date = pxToDate(x);
+            const yearText = formatYearWithMonth(date);
             ctx.font = '12px Inter';
             ctx.fillStyle = '#A0AEC0';
             ctx.textAlign = 'left';
@@ -846,8 +871,30 @@
                 const tickHeight = isMajor ? 15 : 8;
                 ctx.beginPath(); ctx.moveTo(x, axisY - tickHeight); ctx.lineTo(x, axisY + tickHeight);
                 ctx.strokeStyle = '#4A5568'; ctx.lineWidth = isMajor ? 2 : 1; ctx.stroke();
+                
                 if (isMajor || state.view.zoom > (5 / state.view.markerDensity)) {
                     ctx.fillText(formatYear(year), x, axisY + tickHeight + 15);
+                }
+
+                // NEW: Draw month markers if zoomed in enough
+                if (state.view.zoom > MONTH_ZOOM_THRESHOLD && interval <= 1) {
+                    for (let i = 1; i < 12; i++) {
+                        const monthX = dateToPx(year + i / 12);
+                        const monthTickHeight = 5;
+                        ctx.beginPath();
+                        ctx.moveTo(monthX, axisY - monthTickHeight);
+                        ctx.lineTo(monthX, axisY + monthTickHeight);
+                        ctx.strokeStyle = '#A0AEC0'; // Lighter color for months
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                        
+                        // Draw month name if enough space
+                        if (state.view.zoom > MONTH_ZOOM_THRESHOLD * 2.5) {
+                            ctx.font = '9px Inter';
+                            ctx.fillStyle = '#718096';
+                            ctx.fillText(MONTH_NAMES[i], monthX, axisY - monthTickHeight - 5);
+                        }
+                    }
                 }
             }
         }
@@ -941,18 +988,17 @@
                 const titleX = startX + width / 2;
                 let titleY = period.y + 15;
                 
-                const yearRangeText = `(${formatYear(period.startDate, period.isApproximate)} - ${formatYear(period.endDate, period.isApproximate)})`;
-                context.font = '9px Inter'; // Set font for width measurement
+                const yearRangeText = `(${formatYearWithMonth(period.startDate, period.isApproximate)} - ${formatYearWithMonth(period.endDate, period.isApproximate)})`;
+                context.font = '9px Inter';
                 const yearRangeWidth = context.measureText(yearRangeText).width;
                 if (isTitleOutOfBounds || yearRangeWidth > width - 20) {
-                     // Don't draw year range if it doesn't fit
                 } else {
                     if (!isTitleOutOfBounds) {
-                        titleY -= 5; // Move title up to make space
+                        titleY -= 5;
                     }
                 }
                 
-                context.font = 'bold 14px Inter'; // Reset font for title
+                context.font = 'bold 14px Inter';
                 if (isTitleOutOfBounds) {
                     context.save();
                     context.textAlign = 'center';
@@ -1010,7 +1056,7 @@
         function loadImage(item) {
             if (item.img && !state.images[item.img]) {
                 const image = new Image();
-                image.crossOrigin = "anonymous"; // Fix for canvas tainting
+                image.crossOrigin = "anonymous";
                 image.src = item.img;
                 image.onload = () => { state.images[item.img] = image; requestDraw(); };
                 image.onerror = () => { console.error(`Failed to load image: ${item.img}`); state.images[item.img] = null; }
@@ -1027,7 +1073,6 @@
                 return;
             }
 
-            // Clamp to master range
             start = Math.max(MASTER_TIMELINE_START, start);
             end = Math.min(MASTER_TIMELINE_END, end);
             startDateInput.value = start;
@@ -1054,15 +1099,15 @@
 
         function updateZoomSlider() {
             if (!zoomLevelSlider || !MIN_ZOOM_LEVEL) return;
-            const maxZoom = 100;
+            const maxZoom = 500; // Increased max zoom for months
             const sliderValue = 100 * Math.log(state.view.zoom / MIN_ZOOM_LEVEL) / Math.log(maxZoom / MIN_ZOOM_LEVEL);
             zoomLevelSlider.value = Math.max(0, sliderValue);
         }
 
         zoomLevelSlider.addEventListener('input', (e) => {
-            const sliderValue = parseFloat(e.target.value); // 0-100
+            const sliderValue = parseFloat(e.target.value);
             if (!MIN_ZOOM_LEVEL) return;
-            const maxZoom = 100;
+            const maxZoom = 500;
 
             const newZoom = MIN_ZOOM_LEVEL * Math.pow(maxZoom / MIN_ZOOM_LEVEL, sliderValue / 100);
 
@@ -1161,27 +1206,53 @@
             }
 
             const dragDistance = Math.sqrt(Math.pow(e.clientX - state.dragging.startX, 2) + Math.pow(e.clientY - state.dragging.startY, 2));
-            state.dragging.isDown = false;
-            canvas.classList.remove('grabbing');
+            
+            const snapToMonth = state.view.zoom > MONTH_ZOOM_THRESHOLD;
+            const snapFunc = (date) => {
+                if (snapToMonth) {
+                    const year = Math.floor(date);
+                    const monthDecimal = (date - year) * 12;
+                    return year + Math.round(monthDecimal) / 12;
+                }
+                return Math.round(date);
+            };
 
-            if (dragDistance < 5) { // It's a click
+            if (dragDistance >= 5) { // It's a drag
+                if (state.dragging.activeItem) {
+                    const item = state.dragging.activeItem.item;
+                    const type = state.dragging.activeItem.type;
+                    if (type === 'event') {
+                        item.date = snapFunc(item.date);
+                    } else if (type === 'period') {
+                        item.startDate = snapFunc(item.startDate);
+                        item.endDate = snapFunc(item.endDate);
+                        if (item.startDate >= item.endDate) {
+                            item.endDate = item.startDate + (snapToMonth ? 1/12 : 1);
+                        }
+                    }
+                } else if (state.dragging.dragType === 'create' && state.dragging.creationRect) {
+                    const rect = state.dragging.creationRect;
+                    const startDate = pxToDate(Math.min(rect.startX, rect.endX));
+                    const endDate = pxToDate(Math.max(rect.startX, rect.endX));
+                    const snappedStartDate = snapFunc(startDate);
+                    const snappedEndDate = snapFunc(endDate);
+
+                    if (snappedEndDate > snappedStartDate) {
+                        openPeriodModal(null, { startDate: snappedStartDate, endDate: snappedEndDate });
+                    }
+                }
+            } else { // It's a click
                 if (state.dragging.activeItem) {
                     showDetails(state.dragging.activeItem.item, state.dragging.activeItem.type);
                 } else if (state.dragging.dragType === 'create') {
                     const clickedDate = pxToDate(state.dragging.creationRect.startX);
-                    openEventModal(null, clickedDate);
-                }
-            } else { // It's a drag
-                if (state.dragging.dragType === 'create' && state.dragging.creationRect) {
-                    const rect = state.dragging.creationRect;
-                    const startDate = pxToDate(Math.min(rect.startX, rect.endX));
-                    const endDate = pxToDate(Math.max(rect.startX, rect.endX));
-                    if (endDate - startDate > 0.1) {
-                        openPeriodModal(null, { startDate, endDate });
-                    }
+                    const snappedDate = snapFunc(clickedDate);
+                    openEventModal(null, snappedDate);
                 }
             }
 
+            state.dragging.isDown = false;
+            canvas.classList.remove('grabbing');
             state.dragging.activeItem = null;
             state.dragging.creationRect = null;
             state.dragging.dragType = null;
@@ -1209,7 +1280,7 @@
             const mouseY = e.clientY - rect.top;
             state.mouse.x = mouseX;
             state.mouse.y = mouseY;
-            state.mouse.hoverDetail = null; // Reset hover detail on each move
+            state.mouse.hoverDetail = null;
 
             if (state.dragging.isDown) {
                 canvas.classList.add('grabbing');
@@ -1238,8 +1309,8 @@
                             if (type === 'event') { item.date += dateChange; } 
                             else { item.startDate += dateChange; item.endDate += dateChange; }
                         } else if (type === 'period') {
-                            if (state.dragging.dragType === 'resize-right') { item.endDate = Math.max(item.startDate + 0.1, pxToDate(mouseX)); } 
-                            else if (state.dragging.dragType === 'resize-left') { item.startDate = Math.min(item.endDate - 0.1, pxToDate(mouseX)); }
+                            if (state.dragging.dragType === 'resize-right') { item.endDate = Math.max(item.startDate + 0.01, pxToDate(mouseX)); } 
+                            else if (state.dragging.dragType === 'resize-left') { item.startDate = Math.min(item.endDate - 0.01, pxToDate(mouseX)); }
                         }
                     }
                     state.dragging.lastX = e.clientX;
@@ -1323,6 +1394,102 @@
             return null;
         }
 
+        // --- Mini Navigator Logic ---
+        function drawMiniNavigator() {
+            const dpr = window.devicePixelRatio || 1;
+            const { width, height } = miniCanvas;
+            const viewWidth = width / dpr;
+            const viewHeight = height / dpr;
+
+            miniCtx.clearRect(0, 0, viewWidth, viewHeight);
+
+            miniCtx.fillStyle = '#f7fafc';
+            miniCtx.fillRect(0, 0, viewWidth, viewHeight);
+
+            miniCtx.fillStyle = '#cbd5e0';
+            miniCtx.fillRect(0, viewHeight / 2 - 1, viewWidth, 2);
+
+            const masterDuration = MASTER_TIMELINE_END - MASTER_TIMELINE_START;
+            const yearToPx = (year) => ((year - MASTER_TIMELINE_START) / masterDuration) * viewWidth;
+
+            state.periods.forEach(p => {
+                const startX = yearToPx(p.startDate);
+                const endX = yearToPx(p.endDate);
+                miniCtx.fillStyle = p.color || '#4299E1';
+                miniCtx.fillRect(startX, viewHeight * 0.5, endX - startX, viewHeight * 0.5);
+            });
+
+            state.events.forEach(e => {
+                const x = yearToPx(e.date);
+                miniCtx.fillStyle = e.color || '#38A169';
+                miniCtx.fillRect(x - 1, 0, 2, viewHeight * 0.5);
+            });
+
+            const viewStartOnMaster = pxToDate(0);
+            const viewEndOnMaster = pxToDate(viewWidth);
+            const viewStartPx = yearToPx(viewStartOnMaster);
+            const viewEndPx = yearToPx(viewEndOnMaster);
+
+            miniCtx.fillStyle = 'rgba(128, 90, 213, 0.3)'; // purple-500 with alpha
+            miniCtx.fillRect(viewStartPx, 0, viewEndPx - viewStartPx, viewHeight);
+            miniCtx.strokeStyle = 'rgba(107, 33, 168, 0.6)'; // purple-800 with alpha
+            miniCtx.lineWidth = 1;
+            miniCtx.strokeRect(viewStartPx, 0, viewEndPx - viewStartPx, viewHeight);
+        }
+
+        function handleMiniNavInteraction(e) {
+            const rect = miniCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            
+            const masterDuration = MASTER_TIMELINE_END - MASTER_TIMELINE_START;
+            const clickedYear = (mouseX / miniCanvas.clientWidth) * masterDuration + MASTER_TIMELINE_START;
+            
+            centerOnYear(clickedYear);
+        }
+
+        function centerOnYear(year) {
+            const dpr = window.devicePixelRatio || 1;
+            const canvasWidth = canvas.width / dpr;
+            
+            const targetPanX = (canvasWidth / 2) - (year - state.view.start) * state.view.zoom;
+            state.view.panX = targetPanX;
+
+            clampPanX();
+            requestDraw();
+        }
+
+        miniCanvas.addEventListener('mousedown', (e) => {
+            state.miniNavDragging = true;
+            handleMiniNavInteraction(e);
+        });
+        miniCanvas.addEventListener('mousemove', (e) => {
+            if (state.miniNavDragging) {
+                handleMiniNavInteraction(e);
+            }
+        });
+        miniCanvas.addEventListener('mouseup', () => {
+            state.miniNavDragging = false;
+        });
+        miniCanvas.addEventListener('mouseleave', () => {
+            state.miniNavDragging = false;
+        });
+        
+        jumpToYearBtn.addEventListener('click', () => {
+            const year = parseInt(jumpToYearInput.value, 10);
+            if (!isNaN(year)) {
+                centerOnYear(year);
+            }
+        });
+        jumpToYearInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const year = parseInt(jumpToYearInput.value, 10);
+                if (!isNaN(year)) {
+                    centerOnYear(year);
+                }
+            }
+        });
+
+
         // --- Modal Logic ---
         function openModal(modal) { modal.classList.add('active'); }
         function closeModal(modal) { modal.classList.remove('active'); }
@@ -1345,7 +1512,6 @@
             openModal(detailsModal);
         }
         
-        // Modal Button Listeners
         document.getElementById('closeDetails').addEventListener('click', () => closeModal(detailsModal));
         document.getElementById('cancelEvent').addEventListener('click', () => closeModal(eventModal));
         document.getElementById('cancelPeriod').addEventListener('click', () => closeModal(periodModal));
@@ -1439,7 +1605,7 @@
                 document.getElementById('eventId').value = '';
                 descTextarea.value = '';
                 colorPicker.value = '#38A169';
-                if (date) document.getElementById('eventDate').value = parseFloat(date.toFixed(1));
+                if (date !== null) document.getElementById('eventDate').value = date.toFixed(2);
             }
             updateCharCount();
             openModal(eventModal);
@@ -1476,15 +1642,15 @@
                 colorPicker.value = '#4299E1';
                 isApproximateCheckbox.checked = false;
                 if (dates) {
-                    document.getElementById('periodStartDate').value = parseFloat(dates.startDate.toFixed(1));
-                    document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(1));
+                    document.getElementById('periodStartDate').value = dates.startDate.toFixed(2);
+                    document.getElementById('periodEndDate').value = dates.endDate.toFixed(2);
                 }
             }
             updateCharCount();
             openModal(periodModal);
         }
 
-        addEventBtn.addEventListener('click', () => openEventModal());
+        addEventBtn.addEventListener('click', () => openEventModal(null, pxToDate(canvas.width / window.devicePixelRatio / 2)));
         addPeriodBtn.addEventListener('click', () => openPeriodModal());
 
         document.getElementById('eventForm').addEventListener('submit', (e) => {
@@ -1563,7 +1729,7 @@
             const bounds = getTimelineBounds();
             const showDescriptions = state.view.showDescriptions;
             
-            const idealWidth = (bounds.max - bounds.min) * 1; // 1 pixel per year as a baseline
+            const idealWidth = (bounds.max - bounds.min) * 1;
             let width = Math.max(1920, Math.min(6000, idealWidth));
             
             let { totalHeight } = getExportLayout(bounds.min, bounds.max, width, showDescriptions);
@@ -1698,7 +1864,7 @@
                 layout.periods.push(period);
             });
 
-            const bottomPadding = 30; // Space for axis labels and some padding
+            const bottomPadding = 30;
             const totalHeight = maxPeriodY + bottomPadding;
 
             return { layout, totalHeight: Math.max(150, totalHeight), axisY };
@@ -1763,7 +1929,7 @@
         }
 
         function wrapText(context, text, maxWidth) {
-            if (maxWidth <= 0) return [text]; // Avoid infinite loops
+            if (maxWidth <= 0) return [text];
             const words = text.split(' '); let lines = []; let currentLine = words[0] || '';
             for (let i = 1; i < words.length; i++) {
                 const word = words[i]; const width = context.measureText(currentLine + " " + word).width;
@@ -1864,6 +2030,18 @@
             }
             return `${prefix}${roundedYear}`;
         }
+        
+        // NEW: Helper to format year with month if needed
+        function formatYearWithMonth(date, isApproximate = false) {
+            if (state.view.zoom > MONTH_ZOOM_THRESHOLD) {
+                const year = Math.floor(date);
+                const monthIndex = Math.round((date - year) * 12);
+                const month = MONTH_NAMES[monthIndex % 12];
+                const finalYear = monthIndex === 12 ? year + 1 : year; // Handle rounding up to next year's Jan
+                return `${month} ${formatYear(finalYear, isApproximate)}`;
+            }
+            return formatYear(date, isApproximate);
+        }
 
         function hexToRgba(hex, alpha) {
             let r = 0, g = 0, b = 0;
@@ -1877,16 +2055,6 @@
                 b = "0x" + hex[5] + hex[6];
             }
             return `rgba(${+r},${+g},${+b},${alpha})`;
-        }
-
-        function darkenColor(hex, percent) {
-            const f = parseInt(hex.slice(1), 16),
-                t = percent < 0 ? 0 : 255,
-                p = percent < 0 ? percent * -1 : percent,
-                R = f >> 16,
-                G = (f >> 8) & 0x00FF,
-                B = f & 0x0000FF;
-            return "#" + (0x1000000 + (Math.round((t - R) * p) + R) * 0x10000 + (Math.round((t - G) * p) + G) * 0x100 + (Math.round((t - B) * p) + B)).toString(16).slice(1);
         }
 
         // --- Initial Setup ---
