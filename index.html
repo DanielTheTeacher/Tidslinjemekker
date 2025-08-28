@@ -154,7 +154,8 @@
                 </div>
                 <div class="mb-4">
                     <label for="eventDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
-                    <textarea id="eventDesc" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    <textarea id="eventDesc" rows="3" maxlength="200" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    <div id="eventCharCount" class="text-right text-sm text-gray-500 mt-1">0 / 200</div>
                 </div>
                 <div class="flex gap-4">
                     <div class="mb-4 flex-grow">
@@ -362,7 +363,7 @@
                 timelineStart: state.timelineStart,
                 timelineEnd: state.timelineEnd,
                 // Remove calculated layout properties before saving
-                events: state.events.map(({lane, y, ...rest}) => rest),
+                events: state.events.map(({lane, y, height, descriptionLines, ...rest}) => rest),
                 periods: state.periods.map(({lane, y, height, descriptionLines, ...rest}) => rest),
             };
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
@@ -425,55 +426,93 @@
         }
         
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
-            // --- Event Layout ---
-            const eventLaneHeight = state.view.showDescriptions ? 100 : 50;
-            const labelPadding = 20;
+            const vSpacing = 15;
+            const skylineUp = []; 
+            const skylineDown = [];
 
-            context.font = 'bold 14px Inter';
+            // --- Event Layout (Skyline Up) ---
             const sortedEvents = [...state.events].sort((a, b) => a.date - b.date);
-            const eventLanes = [];
             sortedEvents.forEach(event => {
                 const eventX = coordFn(event.date);
-                const textWidth = context.measureText(event.title).width;
-                const labelStartX = eventX - textWidth / 2;
-                let placed = false;
-                for (let i = 0; i < eventLanes.length; i++) {
-                    if (labelStartX > eventLanes[i] + labelPadding) {
-                        event.lane = i;
-                        eventLanes[i] = labelStartX + textWidth;
-                        placed = true;
-                        break;
+                const boxWidth = 180;
+                const startX = eventX - boxWidth / 2;
+                const endX = eventX + boxWidth / 2;
+
+                let lowestY = (viewHeight / 2) + panY - 30;
+                for (const segment of skylineUp) {
+                    if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
+                        lowestY = Math.min(lowestY, segment.topY);
                     }
                 }
-                if (!placed) {
-                    event.lane = eventLanes.length;
-                    eventLanes.push(labelStartX + textWidth);
+                
+                let boxHeight = 0;
+                if (state.view.showDescriptions && (event.description || event.img)) {
+                    const titleHeight = 20;
+                    const padding = 10;
+                    let descHeight = 0;
+                    let imgHeight = 0;
+
+                    if (event.description) {
+                        context.font = '12px Inter';
+                        const lines = wrapText(context, event.description, boxWidth - padding * 2);
+                        event.descriptionLines = lines;
+                        descHeight = lines.length * 14;
+                    } else {
+                        event.descriptionLines = [];
+                    }
+                    if (event.img) {
+                        imgHeight = 50 + (event.description ? padding : 0);
+                    }
+                    boxHeight = titleHeight + descHeight + imgHeight + padding * 2;
                 }
-                event.y = (viewHeight / 2) + panY - 30 - (event.lane * eventLaneHeight);
+                event.height = boxHeight;
+                event.y = lowestY - (boxHeight > 0 ? boxHeight + vSpacing : 0);
+                
+                const newTopY = event.y - vSpacing;
+                
+                const newSkyline = [];
+                let added = false;
+                for (const segment of skylineUp) {
+                    if (segment.endX <= startX) newSkyline.push(segment);
+                    else {
+                        if (!added) {
+                            newSkyline.push({ startX: startX, endX: endX, topY: newTopY });
+                            added = true;
+                        }
+                        if (segment.endX > endX) {
+                           newSkyline.push({startX: endX, endX: segment.endX, topY: segment.topY});
+                        }
+                    }
+                }
+                if (!added) newSkyline.push({ startX: startX, endX: endX, topY: newTopY });
+                skylineUp.length = 0;
+                Array.prototype.push.apply(skylineUp, newSkyline.sort((a, b) => a.startX - b.startX));
             });
 
-            // --- Skyline-based Period Layout ---
-            const periodVSpacing = 15;
-            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
-            const skyline = []; // Stores { endX, bottomY }
 
+            // --- Period Layout (Skyline Down) ---
+            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
                 const endX = coordFn(period.endDate);
                 
                 let highestY = (viewHeight / 2) + panY + 30;
-                for (const segment of skyline) {
-                    // Check for horizontal overlap
+                for (const segment of skylineDown) {
                     if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
                          highestY = Math.max(highestY, segment.bottomY);
                     }
                 }
-                period.y = highestY;
+                
+                context.font = 'bold 14px Inter';
+                const titleWidth = context.measureText(period.title).width;
+                const isTitleOutOfBounds = titleWidth > (endX - startX) - 20;
+                
+                period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
 
-                // Calculate period's own height
                 const titleHeight = 20;
                 const paddingY = 10;
                 let descriptionHeight = 0;
+                let imageHeight = 0;
                 
                 if (state.view.showDescriptions && period.description) {
                     const width = endX - startX;
@@ -485,16 +524,19 @@
                 } else {
                     period.descriptionLines = [];
                 }
-                period.height = titleHeight + descriptionHeight + (paddingY * 2);
-                const newBottomY = period.y + period.height + periodVSpacing;
 
-                // Update the skyline
+                if (state.view.showDescriptions && period.img) {
+                    imageHeight = 50 + (period.description ? paddingY : 0);
+                }
+
+                period.height = titleHeight + descriptionHeight + imageHeight + (paddingY * 2);
+                const newBottomY = period.y + period.height + vSpacing;
+
                 const newSkyline = [];
                 let added = false;
-                for (const segment of skyline) {
-                    if (segment.endX <= startX) {
-                        newSkyline.push(segment);
-                    } else {
+                for (const segment of skylineDown) {
+                    if (segment.endX <= startX) newSkyline.push(segment);
+                    else {
                         if (!added) {
                             newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
                             added = true;
@@ -504,11 +546,9 @@
                         }
                     }
                 }
-                if (!added) {
-                    newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
-                }
-                skyline.length = 0;
-                Array.prototype.push.apply(skyline, newSkyline.sort((a, b) => a.startX - b.startX));
+                if (!added) newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
+                skylineDown.length = 0;
+                Array.prototype.push.apply(skylineDown, newSkyline.sort((a, b) => a.startX - b.startX));
             });
         }
 
@@ -595,21 +635,62 @@
         }
 
         function drawEvents(axisY) {
+            const radius = 8;
             state.events.forEach(event => {
                 const color = event.color || '#38A169';
                 const x = dateToPx(event.date);
-                ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-                ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
-                ctx.fillStyle = '#2D3748'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(event.title, x, event.y - 15);
+                
+                // Draw content box if it exists
+                if (state.view.showDescriptions && event.height > 0) {
+                    const boxWidth = 180;
+                    const boxX = x - boxWidth / 2;
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.roundRect(boxX, event.y, boxWidth, event.height, radius);
+                    ctx.fill();
+                    ctx.stroke();
 
-                if (state.view.showDescriptions && event.description) {
-                    ctx.font = '12px Inter';
-                    ctx.fillStyle = '#4A5568';
+                    // Clip for content
+                    ctx.save();
+                    ctx.clip();
+
+                    // Title
+                    ctx.fillStyle = '#2D3748';
+                    ctx.font = 'bold 14px Inter';
                     ctx.textAlign = 'center';
-                    const lines = wrapText(ctx, event.description, 180);
-                    lines.forEach((line, i) => {
-                        ctx.fillText(line, x, event.y + 15 + (i * 14));
-                    });
+                    ctx.fillText(event.title, x, event.y + 15);
+
+                    // Description
+                    let currentY = event.y + 30;
+                    if (event.descriptionLines && event.descriptionLines.length > 0) {
+                        ctx.font = '12px Inter';
+                        ctx.fillStyle = '#4A5568';
+                        ctx.textAlign = 'center';
+                        event.descriptionLines.forEach(line => {
+                            ctx.fillText(line, x, currentY);
+                            currentY += 14;
+                        });
+                    }
+
+                    // Image
+                    if (event.img && state.images[event.img]) {
+                        const img = state.images[event.img];
+                        const thumbHeight = 50;
+                        const thumbWidth = thumbHeight * (img.width / img.height);
+                        const imgX = x - thumbWidth / 2;
+                        const imgY = currentY + (event.description ? 5 : 0);
+                        ctx.drawImage(img, imgX, imgY, thumbWidth, thumbHeight);
+                    }
+                    ctx.restore();
+                    // Connector line
+                    ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y + event.height); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+                } else {
+                    // Default event marker
+                    ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+                    ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+                    ctx.fillStyle = '#2D3748'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(event.title, x, event.y - 15);
                 }
             });
         }
@@ -645,7 +726,6 @@
                 ctx.strokeStyle = darkenColor(color, 20); 
                 ctx.lineWidth = 2;
                 if (period.isApproximate) {
-                    // Draw only top and bottom strokes for approximate periods
                     ctx.beginPath();
                     ctx.moveTo(startX + radius, period.y);
                     ctx.lineTo(endX - radius, period.y);
@@ -656,38 +736,54 @@
                     ctx.beginPath(); ctx.roundRect(startX, period.y, width, period.height, radius); ctx.stroke();
                 }
 
-                // Clip to the rounded rectangle for drawing text inside
+                // --- Draw Content ---
+                ctx.font = 'bold 14px Inter';
+                const titleWidth = ctx.measureText(period.title).width;
+                const isTitleOutOfBounds = titleWidth > width - 20;
+
+                // --- Draw Title ---
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
+                const titleX = startX + width / 2;
+                const titleY = isTitleOutOfBounds ? period.y - 10 : period.y + 15;
+
+                if (isTitleOutOfBounds) {
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 3;
+                    ctx.strokeText(period.title, titleX, titleY);
+                }
+                ctx.fillStyle = '#1A202C'; 
+                ctx.fillText(period.title, titleX, titleY);
+                
+                // Clip for description and image
                 ctx.save();
                 ctx.beginPath();
                 ctx.roundRect(startX, period.y, width, period.height, radius);
                 ctx.clip();
 
-                // --- Draw Title ---
-                const textFits = ctx.measureText(period.title).width < width - 20;
-                ctx.font = 'bold 14px Inter'; 
-                ctx.textAlign = 'center'; 
-                ctx.textBaseline = 'middle';
-                const titleY = period.y + 15;
-
-                if (!textFits) {
-                    ctx.strokeStyle = 'white';
-                    ctx.lineWidth = 3;
-                    ctx.strokeText(period.title, startX + width / 2, titleY);
-                }
-                ctx.fillStyle = '#1A202C'; 
-                ctx.fillText(period.title, startX + width / 2, titleY);
-                
                 // --- Draw Description ---
+                let currentY = period.y + 30;
                 if (state.view.showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
                     ctx.font = '12px Inter';
                     ctx.fillStyle = '#2D3748';
-                    ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
                     const lines = period.descriptionLines;
                     lines.forEach((line, i) => {
-                        ctx.fillText(line, startX + width / 2, period.y + 30 + (i * 14));
+                        ctx.fillText(line, startX + width / 2, currentY);
+                        currentY += 14;
                     });
                 }
+
+                // --- Draw Image ---
+                if (state.view.showDescriptions && period.img && state.images[period.img]) {
+                    const img = state.images[period.img];
+                    const thumbHeight = 50;
+                    const thumbWidth = thumbHeight * (img.width / img.height);
+                    const imgX = startX + (width - thumbWidth) / 2;
+                    const imgY = currentY + (period.description ? 5 : 0);
+                    ctx.drawImage(img, imgX, imgY, thumbWidth, thumbHeight);
+                }
+
                 ctx.restore();
             });
         }
@@ -883,12 +979,19 @@
         });
         
         function getEventAt(x, y) {
-            const clickRadius = 10;
             for (let i = state.events.length - 1; i >= 0; i--) {
                 const event = state.events[i];
                 const eventX = dateToPx(event.date);
-                const dist = Math.sqrt(Math.pow(x - eventX, 2) + Math.pow(y - event.y, 2));
-                if (dist <= clickRadius) return { item: event, index: i, type: 'event' };
+                if (event.height > 0 && state.view.showDescriptions) {
+                    const boxWidth = 180;
+                    const boxX = eventX - boxWidth / 2;
+                    if (x >= boxX && x <= boxX + boxWidth && y >= event.y && y <= event.y + event.height) {
+                        return { item: event, index: i, type: 'event' };
+                    }
+                } else {
+                    const dist = Math.sqrt(Math.pow(x - eventX, 2) + Math.pow(y - event.y, 2));
+                    if (dist <= 10) return { item: event, index: i, type: 'event' };
+                }
             }
             return null;
         }
@@ -998,22 +1101,32 @@
         function openEventModal(event = null, date = null) {
             document.getElementById('eventForm').reset();
             const colorPicker = document.getElementById('eventColor');
+            const charCount = document.getElementById('eventCharCount');
+            const descTextarea = document.getElementById('eventDesc');
+
+            const updateCharCount = () => {
+                charCount.textContent = `${descTextarea.value.length} / 200`;
+            };
+            descTextarea.addEventListener('input', updateCharCount);
+
             if (event) { // Editing
                 document.getElementById('eventModalTitle').textContent = 'Rediger hendelse';
                 document.getElementById('saveEventBtn').textContent = 'Lagre endringer';
                 document.getElementById('eventId').value = event.id;
                 document.getElementById('eventDate').value = event.date;
                 document.getElementById('eventTitle').value = event.title;
-                document.getElementById('eventDesc').value = event.description;
+                descTextarea.value = event.description || '';
                 document.getElementById('eventImg').value = event.img;
                 colorPicker.value = event.color || '#38A169';
             } else { // Creating new
                 document.getElementById('eventModalTitle').textContent = 'Legg til ny hendelse';
                 document.getElementById('saveEventBtn').textContent = 'Legg til hendelse';
                 document.getElementById('eventId').value = '';
+                descTextarea.value = '';
                 colorPicker.value = '#38A169';
                 if (date) document.getElementById('eventDate').value = parseFloat(date.toFixed(2));
             }
+            updateCharCount();
             openModal(eventModal);
         }
 
@@ -1111,7 +1224,7 @@
             return {
                 timelineStart: state.timelineStart,
                 timelineEnd: state.timelineEnd,
-                events: state.events.map(({lane, y, ...rest}) => rest),
+                events: state.events.map(({lane, y, height, descriptionLines, ...rest}) => rest),
                 periods: state.periods.map(({lane, y, height, descriptionLines, ...rest}) => rest),
             };
         }
