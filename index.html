@@ -915,6 +915,7 @@
         function loadImage(item) {
             if (item.img && !state.images[item.img]) {
                 const image = new Image();
+                image.crossOrigin = "anonymous"; // Fix for canvas tainting
                 image.src = item.img;
                 image.onload = () => { state.images[item.img] = image; requestDraw(); };
                 image.onerror = () => { console.error(`Failed to load image: ${item.img}`); state.images[item.img] = null; }
