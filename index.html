@@ -1005,15 +1005,12 @@
                     calculateLayout(dateToPxExport, height, 0, tempCtx);
                     drawOnTempCanvas(tempCtx, width, height, dateToPxExport, showDescriptions, start, end);
                     
-                    // Embed JSON data into the data URL
-                    const dataToExport = getTimelineData();
-                    const dataStr = JSON.stringify(dataToExport);
-                    const base64Data = btoa(unescape(encodeURIComponent(dataStr))); // encode to Base64
+                    // The original data URL is used directly for the download
                     const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-                    const finalDataUrl = dataUrl + EXPORT_DATA_MARKER + base64Data;
                     
-                    const a = document.createElement('a'); a.href = finalDataUrl; a.download = 'tidslinje.jpeg';
+                    const a = document.createElement('a'); a.href = dataUrl; a.download = 'tidslinje.jpeg';
                     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
                 } catch (err) {
                     console.error("Export failed:", err); showConfirm("En feil oppstod under eksporten.", () => {});
                 } finally {
