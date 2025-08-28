@@ -79,7 +79,7 @@
     <!-- Header & Controls -->
     <header class="bg-white shadow-md p-2 md:p-4 flex flex-wrap items-center justify-between gap-4 z-10">
         <h1 class="text-xl md:text-2xl font-bold text-gray-700 flex items-center gap-2">
-            <img src="logo.png" alt="Timeline Logo" class="w-7 h-7 rounded-full object-cover">
+            <img src="https://placehold.co/28x28/7c3aed/ffffff?text=DT" alt="Timeline Logo" class="w-7 h-7 rounded-full object-cover">
             Daniels tidslinje-mekker
         </h1>
         
@@ -371,6 +371,7 @@
                 x: 0,
                 y: 0,
                 isOverItem: false,
+                hoverDetail: null, // For showing extra info on hover, like year
             },
             editingItemId: null,
             editingItemType: null,
@@ -566,7 +567,7 @@
                 
                 period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
 
-                const titleHeight = 20; const paddingY = 10; let descriptionHeight = 0; let imageHeight = 0;
+                const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 
                 if (state.view.showDescriptions && period.description) {
                     const width = endX - startX;
@@ -585,7 +586,7 @@
                 }
 
                 period.height = titleHeight + descriptionHeight + imageHeight + (paddingY * 2);
-                const newBottomY = period.y + period.height + vSpacing;
+                const newBottomY = period.y + period.height;
 
                 const newSkyline = [];
                 let added = false;
@@ -602,6 +603,38 @@
             });
         }
 
+        function drawHoverYearIndicator() {
+            if (!state.mouse.hoverDetail || state.dragging.isDown) return;
+
+            const detail = state.mouse.hoverDetail;
+            if (detail.type === 'period-edge') {
+                const period = detail.item;
+                const year = detail.side === 'left' ? period.startDate : period.endDate;
+                const text = `${Math.round(year)}`;
+                const x = detail.side === 'left' ? dateToPx(period.startDate) : dateToPx(period.endDate);
+                const y = period.y - 12; // Position it above the period
+
+                ctx.save();
+                ctx.font = 'bold 12px Inter';
+                const textMetrics = ctx.measureText(text);
+                const textWidth = textMetrics.width;
+                const textHeight = 12; // Approximate height
+                const padding = 6;
+
+                // Draw background
+                ctx.fillStyle = 'rgba(45, 55, 72, 0.85)'; // gray-800 with alpha
+                ctx.beginPath();
+                ctx.roundRect(x - textWidth / 2 - padding, y - textHeight / 2 - padding, textWidth + padding * 2, textHeight + padding * 2, 4);
+                ctx.fill();
+
+                // Draw text
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, x, y);
+                ctx.restore();
+            }
+        }
 
         function draw() {
             const dpr = window.devicePixelRatio || 1;
@@ -621,6 +654,7 @@
             drawEvents(ctx, dateToPx, state.events, state.images, axisY, state.view.showDescriptions);
             drawCreationRect();
             drawHoverIndicator();
+            drawHoverYearIndicator();
             drawEdgeIndicators();
         }
 
@@ -828,7 +862,6 @@
         }
         
         function drawPeriods(context, coordFn, periods, images, showDescriptions) {
-            const radius = 8;
             periods.forEach(period => {
                 const color = period.color || '#4299E1';
                 const startX = coordFn(period.startDate);
@@ -851,19 +884,21 @@
                 } else {
                     context.fillStyle = hexToRgba(color, 0.7); 
                 }
-                context.beginPath(); context.roundRect(startX, period.y, width, period.height, radius); context.fill();
+                context.beginPath(); 
+                context.rect(startX, period.y, width, period.height); 
+                context.fill();
                 
                 context.strokeStyle = darkenColor(color, 20); 
                 context.lineWidth = 2;
                 if (period.isApproximate) {
                     context.beginPath();
-                    context.moveTo(startX + radius, period.y);
-                    context.lineTo(endX - radius, period.y);
-                    context.moveTo(startX + radius, period.y + period.height);
-                    context.lineTo(endX - radius, period.y + period.height);
+                    context.moveTo(startX, period.y);
+                    context.lineTo(endX, period.y);
+                    context.moveTo(startX, period.y + period.height);
+                    context.lineTo(endX, period.y + period.height);
                     context.stroke();
                 } else {
-                    context.beginPath(); context.roundRect(startX, period.y, width, period.height, radius); context.stroke();
+                    context.strokeRect(startX, period.y, width, period.height);
                 }
 
                 context.font = 'bold 14px Inter';
@@ -883,10 +918,10 @@
                 
                 context.save();
                 context.beginPath();
-                context.roundRect(startX, period.y, width, period.height, radius);
+                context.rect(startX, period.y, width, period.height);
                 context.clip();
 
-                let currentY = period.y + 30;
+                let currentY = period.y + 24;
                 if (showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
                     const fontSize = getDynamicFontSize(period.descriptionLines.length);
                     const lineHeight = fontSize * 1.2;
@@ -1101,6 +1136,7 @@
             const mouseY = e.clientY - rect.top;
             state.mouse.x = mouseX;
             state.mouse.y = mouseY;
+            state.mouse.hoverDetail = null; // Reset hover detail on each move
 
             if (state.dragging.isDown) {
                 canvas.classList.add('grabbing');
@@ -1134,10 +1170,24 @@
                 state.mouse.isOverItem = !!item;
                 if (item) {
                     if (item.type === 'period') {
-                        const startPx = dateToPx(item.item.startDate);
-                        const endPx = dateToPx(item.item.endDate);
-                        if (mouseX > endPx - 10 || mouseX < startPx + 10) { canvas.style.cursor = 'ew-resize'; } 
-                        else { canvas.style.cursor = 'move'; }
+                        const period = item.item;
+                        const startPx = dateToPx(period.startDate);
+                        const endPx = dateToPx(period.endDate);
+                        const handleSize = 10;
+
+                        if (!period.isApproximate) {
+                            if (mouseX > endPx - handleSize) {
+                                canvas.style.cursor = 'ew-resize';
+                                state.mouse.hoverDetail = { type: 'period-edge', side: 'right', item: period };
+                            } else if (mouseX < startPx + handleSize) {
+                                canvas.style.cursor = 'ew-resize';
+                                state.mouse.hoverDetail = { type: 'period-edge', side: 'left', item: period };
+                            } else {
+                                canvas.style.cursor = 'move';
+                            }
+                        } else {
+                             canvas.style.cursor = 'move';
+                        }
                     } else {
                         canvas.style.cursor = 'move';
                     }
@@ -1527,7 +1577,7 @@
                 let highestY = axisY + 30;
                 for (const segment of skylineDown) {
                      if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
-                          highestY = Math.max(highestY, segment.bottomY);
+                           highestY = Math.max(highestY, segment.bottomY);
                      }
                 }
                 
@@ -1537,7 +1587,7 @@
                 
                 period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
                 
-                const titleHeight = 20; const paddingY = 10; let descriptionHeight = 0; let imageHeight = 0;
+                const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 if (showDescriptions && period.description) {
                     const pWidth = endX - startX;
                     const wrapWidth = Math.max(1, pWidth - (paddingY * 2));
@@ -1550,7 +1600,7 @@
                 if (showDescriptions && period.img) imageHeight = 50 + (period.description ? paddingY : 0);
 
                 period.height = titleHeight + descriptionHeight + imageHeight + (paddingY * 2);
-                const newBottomY = period.y + period.height + vSpacing;
+                const newBottomY = period.y + period.height;
                 maxPeriodY = Math.max(maxPeriodY, newBottomY);
                 
                 const newSkyline = []; let added = false;
@@ -1567,10 +1617,10 @@
                 layout.periods.push(period);
             });
 
-            const axisLabelsHeight = 30;
-            const totalHeight = maxPeriodY + axisLabelsHeight;
+            const bottomPadding = 30; // Space for axis labels and some padding
+            const totalHeight = maxPeriodY + bottomPadding;
 
-            return { layout, totalHeight: Math.max(400, totalHeight), axisY };
+            return { layout, totalHeight: Math.max(150, totalHeight), axisY };
         }
 
 
@@ -1602,9 +1652,9 @@
                     const tempCtx = tempCanvas.getContext('2d');
                     tempCtx.fillStyle = '#f7fafc'; tempCtx.fillRect(0, 0, width, height);
                     
-                    const { layout, axisY } = getExportLayout(start, end, width, showDescriptions);
+                    const finalHeightLayout = getExportLayout(start, end, width, showDescriptions);
 
-                    drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end, showDescriptions);
+                    drawOnTempCanvas(tempCtx, width, height, finalHeightLayout.layout, finalHeightLayout.axisY, start, end, showDescriptions);
                     
                     const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
                     
