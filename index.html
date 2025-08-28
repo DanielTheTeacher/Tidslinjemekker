@@ -208,6 +208,12 @@
                         <input type="color" id="periodColor" value="#4299E1" class="mt-1">
                     </div>
                 </div>
+                <div class="mb-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="periodIsApproximate" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                        <span class="ml-2 text-sm text-gray-700">"Sånn ca." dato</span>
+                    </label>
+                </div>
                 <div class="flex justify-end gap-4">
                     <button type="button" id="cancelPeriod" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
                     <button type="submit" id="savePeriodBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Legg til periode</button>
@@ -327,8 +333,10 @@
             images: {}, // Cache for loaded images
             dragging: {
                 isDown: false,
-                startX: 0,
+                startX: 0, // For panning and click-vs-drag check
                 startY: 0,
+                lastX: 0, // For calculating deltas when moving items
+                lastY: 0,
                 scrollLeft: 0,
                 scrollTop: 0,
                 activeItem: null, // Can be an event or a period
@@ -616,12 +624,27 @@
                 const endX = dateToPx(period.endDate);
                 const width = endX - startX;
 
-                ctx.fillStyle = hexToRgba(color, 0.7); 
+                if (period.isApproximate && width > 0) {
+                    const gradient = ctx.createLinearGradient(startX, 0, endX, 0);
+                    const fadeWidth = Math.min(width / 2, 20); // Fade over 20px or half the width
+                    const fadeStart = fadeWidth / width;
+                    const fadeEnd = 1 - fadeStart;
+                    const baseColor = hexToRgba(color, 0.7);
+                    const transparentColor = hexToRgba(color, 0);
+                    
+                    gradient.addColorStop(0, transparentColor);
+                    gradient.addColorStop(fadeStart, baseColor);
+                    gradient.addColorStop(fadeEnd, baseColor);
+                    gradient.addColorStop(1, transparentColor);
+                    ctx.fillStyle = gradient;
+                } else {
+                    ctx.fillStyle = hexToRgba(color, 0.7); 
+                }
+                
                 ctx.strokeStyle = darkenColor(color, 20); 
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.roundRect(startX, period.y, width, periodHeight, 8); ctx.fill(); ctx.stroke();
 
-                // FIX: Use a dark color for text for better contrast
                 ctx.fillStyle = '#1A202C'; 
                 ctx.font = 'bold 14px Inter'; 
                 ctx.textAlign = 'center'; 
@@ -636,7 +659,6 @@
                     ctx.fillText(period.title, startX + width / 2, period.y - 10);
                 }
 
-                // FIX: Use pre-calculated description lines from layout phase
                 if (state.view.showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
                     ctx.font = '12px Inter';
                     ctx.fillStyle = '#4A5568';
@@ -708,6 +730,8 @@
             state.dragging.isDown = true;
             state.dragging.startX = e.clientX;
             state.dragging.startY = e.clientY;
+            state.dragging.lastX = e.clientX; // For calculating move deltas
+            state.dragging.lastY = e.clientY; // For calculating move deltas
             state.dragging.scrollLeft = state.view.panX;
             state.dragging.scrollTop = state.view.panY;
 
@@ -790,10 +814,9 @@
 
             if (state.dragging.isDown) {
                 canvas.classList.add('grabbing');
-                const dx = e.clientX - state.dragging.startX;
-                const dy = e.clientY - state.dragging.startY;
-
+                
                 if (state.dragging.activeItem) {
+                    const dx = e.clientX - state.dragging.lastX;
                     const item = state.dragging.activeItem.item;
                     const type = state.dragging.activeItem.type;
                     const dateChange = dx / state.view.zoom;
@@ -805,11 +828,13 @@
                         if (state.dragging.dragType === 'resize-right') { item.endDate = Math.max(item.startDate + 0.1, pxToDate(mouseX)); } 
                         else if (state.dragging.dragType === 'resize-left') { item.startDate = Math.min(item.endDate - 0.1, pxToDate(mouseX)); }
                     }
-                    state.dragging.startX = e.clientX;
-                    state.dragging.startY = e.clientY;
+                    state.dragging.lastX = e.clientX;
+                    state.dragging.lastY = e.clientY;
                 } else if (state.dragging.dragType === 'create') {
                     state.dragging.creationRect.endX = mouseX;
                 } else if (state.dragging.dragType === 'pan') {
+                    const dx = e.clientX - state.dragging.startX;
+                    const dy = e.clientY - state.dragging.startY;
                     state.view.panX = state.dragging.scrollLeft + dx;
                     state.view.panY = state.dragging.scrollTop + dy;
                 }
@@ -978,6 +1003,7 @@
         function openPeriodModal(period = null, dates = null) {
             document.getElementById('periodForm').reset();
             const colorPicker = document.getElementById('periodColor');
+            const isApproximateCheckbox = document.getElementById('periodIsApproximate');
             if (period) { // Editing
                 document.getElementById('periodModalTitle').textContent = 'Rediger periode';
                 document.getElementById('savePeriodBtn').textContent = 'Lagre endringer';
@@ -988,11 +1014,13 @@
                 document.getElementById('periodDesc').value = period.description;
                 document.getElementById('periodImg').value = period.img;
                 colorPicker.value = period.color || '#4299E1';
+                isApproximateCheckbox.checked = period.isApproximate || false;
             } else { // Creating new
                 document.getElementById('periodModalTitle').textContent = 'Legg til ny periode';
                 document.getElementById('savePeriodBtn').textContent = 'Legg til periode';
                 document.getElementById('periodId').value = '';
                 colorPicker.value = '#4299E1';
+                isApproximateCheckbox.checked = false;
                 if (dates) {
                     document.getElementById('periodStartDate').value = parseFloat(dates.startDate.toFixed(2));
                     document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(2));
@@ -1035,6 +1063,7 @@
                 description: document.getElementById('periodDesc').value,
                 img: document.getElementById('periodImg').value,
                 color: document.getElementById('periodColor').value,
+                isApproximate: document.getElementById('periodIsApproximate').checked,
             };
             if (data.startDate >= data.endDate) { showConfirm('Startdato må være før sluttdato.', () => {}, true); return; }
             if (periodId) {
@@ -1080,8 +1109,8 @@
             const bounds = getTimelineBounds();
             const width = 1920;
             const showDescriptions = state.view.showDescriptions;
-            const height = calculateExportHeight(bounds.min, bounds.max, width, showDescriptions);
-            exportJpeg(bounds.min, bounds.max, width, height, showDescriptions);
+            const { totalHeight } = getExportLayout(bounds.min, bounds.max, width, showDescriptions);
+            exportJpeg(bounds.min, bounds.max, width, totalHeight, showDescriptions);
             closeModal(exportModal);
         });
         
@@ -1095,33 +1124,57 @@
             openModal(exportJpegSettingsModal);
         });
 
-        function calculateExportHeight(start, end, width, showDescriptions) {
-            if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return 400;
-
+        function getExportLayout(start, end, width, showDescriptions) {
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
             tempCanvas.width = width;
-            tempCtx.font = '12px Inter';
+            const dateToPxExport = (date) => (date - start) * (width / (end - start));
 
-            const exportZoom = width / (end - start);
-            const dateToPxExport = (date) => (date - start) * exportZoom;
-            
-            // Calculate event space (can be simplified for height calculation)
+            const layout = { events: [], periods: [] };
+            let totalHeight = 0;
+            let axisY = 0;
+            const topPadding = 30;
+            const labelPadding = 20;
+
+            // --- Event Layout ---
+            tempCtx.font = 'bold 14px Inter';
             const eventLaneHeight = showDescriptions ? 100 : 50;
-            const { eventLanes } = calculateLayout(dateToPxExport, 1000, 0, tempCtx);
-            const topSpace = (eventLanes * eventLaneHeight) + 30;
+            const sortedEvents = JSON.parse(JSON.stringify(state.events)).sort((a, b) => a.date - b.date);
+            const eventLanes = [];
+            let eventLaneCount = 0;
+            sortedEvents.forEach(event => {
+                const eventX = dateToPxExport(event.date);
+                const textWidth = tempCtx.measureText(event.title).width;
+                const labelStartX = eventX - textWidth / 2;
+                let placed = false;
+                for (let i = 0; i < eventLanes.length; i++) {
+                    if (labelStartX > eventLanes[i] + labelPadding) {
+                        event.lane = i;
+                        eventLanes[i] = labelStartX + textWidth;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    event.lane = eventLanes.length;
+                    eventLanes.push(labelStartX + textWidth);
+                }
+                event.y = topPadding + (event.lane * eventLaneHeight);
+                layout.events.push(event);
+            });
+            eventLaneCount = eventLanes.length;
+            const eventsHeight = eventLaneCount * eventLaneHeight;
             
-            // Calculate period space with dynamic heights
+            axisY = topPadding + eventsHeight + 15;
+
+            // --- Period Layout ---
             const periodBaseHeight = 40;
             const periodVSpacing = 15;
             const periodDescLineHeight = 14;
             const periodDescTopMargin = 15;
-            const labelPadding = 20;
-
-            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
+            const sortedPeriods = JSON.parse(JSON.stringify(state.periods)).sort((a, b) => a.startDate - b.startDate);
             const periodLanes = [];
             const laneEndPositions = [];
-
             sortedPeriods.forEach(period => {
                 const startX = dateToPxExport(period.startDate);
                 const endX = dateToPxExport(period.endDate);
@@ -1141,39 +1194,44 @@
                 }
             });
 
-            let totalPeriodsHeight = 0;
+            let currentY = axisY + 30;
             periodLanes.forEach(lane => {
                 let maxLaneHeight = periodBaseHeight;
-                if (showDescriptions) {
-                    lane.forEach(period => {
-                        let descriptionHeight = 0;
-                        if (period.description) {
-                            const pWidth = dateToPxExport(period.endDate) - dateToPxExport(period.startDate);
-                            const wrapWidth = Math.max(1, pWidth - 20);
-                            const lines = wrapText(tempCtx, period.description, wrapWidth);
-                            descriptionHeight = lines.length * periodDescLineHeight;
-                        }
-                        const totalOccupiedHeight = periodBaseHeight + (descriptionHeight > 0 ? periodDescTopMargin + descriptionHeight : 0);
-                        if (totalOccupiedHeight > maxLaneHeight) {
-                            maxLaneHeight = totalOccupiedHeight;
-                        }
-                    });
-                }
-                totalPeriodsHeight += maxLaneHeight + periodVSpacing;
+                lane.forEach(period => {
+                    period.y = currentY;
+                    let descriptionHeight = 0;
+                    if (showDescriptions && period.description) {
+                        const pWidth = dateToPxExport(period.endDate) - dateToPxExport(period.startDate);
+                        const wrapWidth = Math.max(1, pWidth - 20);
+                        tempCtx.font = '12px Inter';
+                        const lines = wrapText(tempCtx, period.description, wrapWidth);
+                        period.descriptionLines = lines;
+                        descriptionHeight = lines.length * periodDescLineHeight;
+                    }
+                    const totalOccupiedHeight = periodBaseHeight + (descriptionHeight > 0 ? periodDescTopMargin + descriptionHeight : 0);
+                    if (totalOccupiedHeight > maxLaneHeight) {
+                        maxLaneHeight = totalOccupiedHeight;
+                    }
+                });
+                lane.forEach(p => layout.periods.push(p));
+                currentY += maxLaneHeight + periodVSpacing;
             });
 
             const axisLabelsHeight = 30;
-            const totalHeight = topSpace + totalPeriodsHeight + axisLabelsHeight;
+            totalHeight = currentY + axisLabelsHeight;
 
-            return Math.max(400, Math.ceil(totalHeight));
+            return { layout, totalHeight: Math.max(400, totalHeight), axisY };
         }
+
 
         function updateCalculatedExportHeight() {
             const start = parseFloat(document.getElementById('exportStartDate').value);
             const end = parseFloat(document.getElementById('exportEndDate').value);
             const width = parseInt(document.getElementById('exportWidth').value, 10);
             const showDescriptions = document.getElementById('exportDescriptions').checked;
-            document.getElementById('exportHeight').value = calculateExportHeight(start, end, width, showDescriptions);
+            if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return;
+            const { totalHeight } = getExportLayout(start, end, width, showDescriptions);
+            document.getElementById('exportHeight').value = Math.ceil(totalHeight);
         }
         
         ['exportStartDate', 'exportEndDate', 'exportWidth', 'exportDescriptions'].forEach(id => {
@@ -1193,16 +1251,10 @@
                     tempCanvas.width = width; tempCanvas.height = height;
                     const tempCtx = tempCanvas.getContext('2d');
                     tempCtx.fillStyle = '#f7fafc'; tempCtx.fillRect(0, 0, width, height);
-                    const exportZoom = width / (end - start);
-                    const dateToPxExport = (date) => (date - start) * exportZoom;
                     
-                    // Recalculate layout with export dimensions so `period.y` is correct
-                    const originalShowDescriptions = state.view.showDescriptions;
-                    state.view.showDescriptions = showDescriptions;
-                    calculateLayout(dateToPxExport, height, 0, tempCtx);
-                    state.view.showDescriptions = originalShowDescriptions;
+                    const { layout, axisY } = getExportLayout(start, end, width, showDescriptions);
 
-                    drawOnTempCanvas(tempCtx, width, height, dateToPxExport, showDescriptions, start, end);
+                    drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end);
                     
                     const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
                     
@@ -1239,8 +1291,9 @@
             lines.push(currentLine); return lines;
         }
 
-        function drawOnTempCanvas(tempCtx, width, height, dateToPxFn, showDesc, start, end) {
-            const axisY = height / 2;
+        function drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end) {
+            const dateToPxFn = (date) => (date - start) * (width / (end - start));
+
             tempCtx.beginPath(); tempCtx.moveTo(0, axisY); tempCtx.lineTo(width, axisY); tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = 2; tempCtx.stroke();
             
             const tempState = { timelineStart: start, timelineEnd: end, view: { zoom: width / (end - start), markerDensity: 1 } };
@@ -1259,29 +1312,44 @@
                 tempCtx.fillText(year, x, axisY + tickHeight + 15);
             }
             
-            state.events.forEach(event => {
+            layout.events.forEach(event => {
                 const color = event.color || '#38A169';
                 const x = dateToPxFn(event.date);
-                const eventY = event.y; // Use y calculated for export context
+                const eventY = event.y;
                 
                 tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = color; tempCtx.lineWidth = 2; tempCtx.stroke();
                 tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = color; tempCtx.fill();
                 tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, eventY - 15);
                 
-                if (showDesc && event.description) {
+                if (event.description) {
                     tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
                     const lines = wrapText(tempCtx, event.description, 200);
                     lines.forEach((line, i) => tempCtx.fillText(line, x, eventY + 15 + (i * 14)));
                 }
             });
 
-            state.periods.forEach(period => {
+            layout.periods.forEach(period => {
                 const color = period.color || '#4299E1';
                 const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
-                const periodY = period.y; // Use y calculated for export context
+                const periodY = period.y;
                 const periodHeight = 40;
                 
-                tempCtx.fillStyle = hexToRgba(color, 0.7); 
+                if (period.isApproximate && pWidth > 0) {
+                    const gradient = tempCtx.createLinearGradient(startX, 0, endX, 0);
+                    const fadeWidth = Math.min(pWidth / 2, 20);
+                    const fadeStart = fadeWidth / pWidth;
+                    const fadeEnd = 1 - fadeStart;
+                    const baseColor = hexToRgba(color, 0.7);
+                    const transparentColor = hexToRgba(color, 0);
+                    gradient.addColorStop(0, transparentColor);
+                    gradient.addColorStop(fadeStart, baseColor);
+                    gradient.addColorStop(fadeEnd, baseColor);
+                    gradient.addColorStop(1, transparentColor);
+                    tempCtx.fillStyle = gradient;
+                } else {
+                    tempCtx.fillStyle = hexToRgba(color, 0.7);
+                }
+                
                 tempCtx.strokeStyle = darkenColor(color, 20); 
                 tempCtx.lineWidth = 2;
                 tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodHeight, 8); tempCtx.fill(); tempCtx.stroke();
@@ -1289,7 +1357,7 @@
                 tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center';
                 const textFits = tempCtx.measureText(period.title).width < pWidth - 10;
                 if (textFits) {
-                    tempCtx.fillStyle = '#1A202C'; // Dark text color
+                    tempCtx.fillStyle = '#1A202C';
                     tempCtx.textBaseline = 'middle';
                     tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, periodY, pWidth, periodHeight); tempCtx.clip();
                     tempCtx.fillText(period.title, startX + pWidth / 2, periodY + periodHeight / 2); tempCtx.restore();
@@ -1298,7 +1366,7 @@
                     tempCtx.textBaseline = 'alphabetic';
                     tempCtx.fillText(period.title, startX + pWidth / 2, periodY - 10);
                 }
-                if (showDesc && period.descriptionLines && period.descriptionLines.length > 0) {
+                if (period.descriptionLines && period.descriptionLines.length > 0) {
                     tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
                     const lines = period.descriptionLines;
                     const periodDescLineHeight = 14;
