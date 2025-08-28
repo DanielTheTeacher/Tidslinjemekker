@@ -120,7 +120,7 @@
             <!-- Detail Level -->
             <div class="flex items-center gap-2">
                 <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå</label>
-                <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="3.425" class="w-48">
+                <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="3.875" class="w-48">
             </div>
 
             <!-- Show Descriptions Toggle -->
@@ -347,7 +347,7 @@
                 zoom: 1, // pixels per year
                 panX: 0,
                 panY: 0,
-                markerDensity: 3.425,
+                markerDensity: 3.875,
                 showDescriptions: false,
                 edgeIndicators: {
                     leftAnim: 0, // 0 (hidden) to 1 (visible)
@@ -611,7 +611,7 @@
             if (detail.type === 'period-edge') {
                 const period = detail.item;
                 const year = detail.side === 'left' ? period.startDate : period.endDate;
-                const text = `${Math.round(year)}`;
+                const text = formatYear(year);
                 const x = detail.side === 'left' ? dateToPx(period.startDate) : dateToPx(period.endDate);
                 const y = period.y - 12; // Position it above the period
 
@@ -802,7 +802,7 @@
                 ctx.beginPath(); ctx.moveTo(x, axisY - tickHeight); ctx.lineTo(x, axisY + tickHeight);
                 ctx.strokeStyle = '#4A5568'; ctx.lineWidth = isMajor ? 2 : 1; ctx.stroke();
                 if (isMajor || state.view.zoom > (5 / state.view.markerDensity)) {
-                    ctx.fillText(year, x, axisY + tickHeight + 15);
+                    ctx.fillText(formatYear(year), x, axisY + tickHeight + 15);
                 }
             }
         }
@@ -889,19 +889,6 @@
                 context.rect(startX, period.y, width, period.height); 
                 context.fill();
                 
-                context.strokeStyle = darkenColor(color, 20); 
-                context.lineWidth = 2;
-                if (period.isApproximate) {
-                    context.beginPath();
-                    context.moveTo(startX, period.y);
-                    context.lineTo(endX, period.y);
-                    context.moveTo(startX, period.y + period.height);
-                    context.lineTo(endX, period.y + period.height);
-                    context.stroke();
-                } else {
-                    context.strokeRect(startX, period.y, width, period.height);
-                }
-
                 context.font = 'bold 14px Inter';
                 const titleWidth = context.measureText(period.title).width;
                 const isTitleOutOfBounds = titleWidth > width - 20;
@@ -909,7 +896,8 @@
                 const titleX = startX + width / 2;
                 let titleY = isTitleOutOfBounds ? period.y - 10 : period.y + 15;
                 
-                const yearRangeText = `(${Math.round(period.startDate)} - ${Math.round(period.endDate)})`;
+                const yearRangeText = `(${formatYear(period.startDate)} - ${formatYear(period.endDate)})`;
+                context.font = '9px Inter'; // Set font for width measurement
                 const yearRangeWidth = context.measureText(yearRangeText).width;
                 if (isTitleOutOfBounds || yearRangeWidth > width - 20) {
                      // Don't draw year range if it doesn't fit
@@ -919,7 +907,7 @@
                     }
                 }
                 
-
+                context.font = 'bold 14px Inter'; // Reset font for title
                 if (isTitleOutOfBounds) {
                     context.strokeStyle = 'white';
                     context.lineWidth = 3;
@@ -1735,7 +1723,7 @@
                 const tickHeight = year % (interval * 10) === 0 ? 15 : 8;
                 tempCtx.beginPath(); tempCtx.moveTo(x, axisY - tickHeight); tempCtx.lineTo(x, axisY + tickHeight);
                 tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = year % (interval * 10) === 0 ? 2 : 1; tempCtx.stroke();
-                tempCtx.fillText(year, x, axisY + tickHeight + 15);
+                tempCtx.fillText(formatYear(year), x, axisY + tickHeight + 15);
             }
             
             drawEvents(tempCtx, dateToPxFn, layout.events, state.images, axisY, showDescriptions);
@@ -1796,6 +1784,14 @@
         });
 
         // --- Helper Functions ---
+        function formatYear(year) {
+            const roundedYear = Math.round(year);
+            if (roundedYear < 0) {
+                return `${Math.abs(roundedYear)} fvt.`;
+            }
+            return `${roundedYear}`;
+        }
+
         function hexToRgba(hex, alpha) {
             let r = 0, g = 0, b = 0;
             if (hex.length == 4) {
