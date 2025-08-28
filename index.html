@@ -6,6 +6,8 @@
     <title>Daniels tidslinje-mekker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Library for reading/writing JPEG metadata -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/piexifjs/1.0.6/piexif.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -79,6 +81,11 @@
                 <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå:</label>
                 <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="1" class="w-24">
             </div>
+             <!-- Show Descriptions Toggle -->
+            <div class="flex items-center gap-2 border-l pl-4">
+                <label for="showDescriptionsToggle" class="text-sm font-medium cursor-pointer">Vis beskrivelser</label>
+                <input type="checkbox" id="showDescriptionsToggle" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer">
+            </div>
         </div>
 
         <!-- Action Buttons -->
@@ -87,7 +94,6 @@
             <button id="addPeriodBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-sm font-semibold">Legg til periode</button>
             <button id="exportBtn" class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-600 text-sm font-semibold">Eksporter</button>
             <button id="importBtn" class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-600 text-sm font-semibold">Importer</button>
-            <!-- NEW: Clear All Button -->
             <button id="clearAllBtn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm font-semibold">Slett alt</button>
             <input type="file" id="importFile" class="hidden" accept=".json,image/jpeg">
         </div>
@@ -260,7 +266,8 @@
         const endDateInput = document.getElementById('endDate');
         const setDateRangeBtn = document.getElementById('setDateRange');
         const zoomSensitivitySlider = document.getElementById('zoomSensitivity');
-        const clearAllBtn = document.getElementById('clearAllBtn'); // NEW: Clear All button
+        const clearAllBtn = document.getElementById('clearAllBtn');
+        const showDescriptionsToggle = document.getElementById('showDescriptionsToggle');
         
         // Modals
         const detailsModal = document.getElementById('detailsModal');
@@ -288,6 +295,7 @@
                 panX: 0,
                 panY: 0,
                 markerDensity: 1,
+                showDescriptions: false,
             },
             images: {}, // Cache for loaded images
             dragging: {
@@ -297,7 +305,7 @@
                 scrollLeft: 0,
                 scrollTop: 0,
                 activeItem: null, // Can be an event or a period
-                dragType: null, // 'move', 'resize-left', 'resize-right'
+                dragType: null, // 'move', 'resize-left', 'resize-right', 'pan', 'create'
                 creationRect: null, // For drag-to-create-period
             },
             mouse: {
@@ -332,18 +340,16 @@
                     state.events = parsedData.events;
                     state.periods = parsedData.periods;
                     
-                    // Update UI elements from loaded state
                     startDateInput.value = state.timelineStart;
                     endDateInput.value = state.timelineEnd;
                     
-                    // Pre-load images
                     [...state.events, ...state.periods].forEach(loadImage);
                     
                     console.log('Tidslinje lastet fra lagring.');
                     return true;
                 } catch (e) {
                     console.error("Feil ved lasting av lagret data:", e);
-                    localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupt data
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
                     return false;
                 }
             }
@@ -380,8 +386,8 @@
         }
         
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
-            const eventLaneHeight = 50;
-            const periodLaneHeight = 55; // Increased for text outside
+            const eventLaneHeight = state.view.showDescriptions ? 100 : 50;
+            const periodLaneHeight = state.view.showDescriptions ? 110 : 55;
             const labelPadding = 20;
 
             context.font = 'bold 14px Inter';
@@ -518,6 +524,16 @@
                 ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = '#38A169'; ctx.lineWidth = 2; ctx.stroke();
                 ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = '#38A169'; ctx.fill();
                 ctx.fillStyle = '#2D3748'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(event.title, x, event.y - 15);
+
+                if (state.view.showDescriptions && event.description) {
+                    ctx.font = '12px Inter';
+                    ctx.fillStyle = '#4A5568';
+                    ctx.textAlign = 'center';
+                    const lines = wrapText(ctx, event.description, 180);
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line, x, event.y + 15 + (i * 14));
+                    });
+                }
             });
         }
         
@@ -540,6 +556,17 @@
                 } else {
                     ctx.fillStyle = '#2B6CB0';
                     ctx.fillText(period.title, startX + width / 2, period.y - 10);
+                }
+
+                if (state.view.showDescriptions && period.description) {
+                    ctx.font = '12px Inter';
+                    ctx.fillStyle = '#4A5568';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'alphabetic';
+                    const lines = wrapText(ctx, period.description, width - 20);
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line, startX + width / 2, period.y + 40 + 15 + (i * 14));
+                    });
                 }
             });
         }
@@ -564,7 +591,7 @@
                 const totalYears = state.timelineEnd - state.timelineStart;
                 state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
                 state.view.panX = 0; state.view.panY = 0; requestDraw();
-                saveState(); // Save state on date range change
+                saveState();
             } else {
                 showConfirm('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.', () => {});
             }
@@ -572,6 +599,12 @@
 
         zoomSensitivitySlider.addEventListener('input', (e) => {
             state.view.markerDensity = parseFloat(e.target.value);
+            requestDraw();
+        });
+
+        showDescriptionsToggle.addEventListener('change', (e) => {
+            state.view.showDescriptions = e.target.checked;
+            document.getElementById('exportDescriptions').checked = e.target.checked;
             requestDraw();
         });
 
@@ -597,7 +630,10 @@
             state.dragging.scrollLeft = state.view.panX;
             state.dragging.scrollTop = state.view.panY;
 
-            let item = getPeriodAt(mouseX, mouseY) || getEventAt(mouseX, mouseY);
+            const item = getPeriodAt(mouseX, mouseY) || getEventAt(mouseX, mouseY);
+            const axisY = (canvas.height / window.devicePixelRatio / 2) + state.view.panY;
+            const distFromAxis = Math.abs(mouseY - axisY);
+            const actionZoneThreshold = 50; // pixels from axis to allow creation
 
             if (item) {
                 state.dragging.activeItem = item;
@@ -611,34 +647,42 @@
                 } else {
                     state.dragging.dragType = 'move';
                 }
-            } else {
-                state.dragging.activeItem = null;
-                state.dragging.dragType = null;
+            } else if (distFromAxis < actionZoneThreshold) {
+                state.dragging.dragType = 'create';
                 state.dragging.creationRect = { startX: mouseX, endX: mouseX };
+            } else {
+                state.dragging.dragType = 'pan';
             }
         });
 
         canvas.addEventListener('mouseup', (e) => {
             if (!state.dragging.isDown) return;
+
+            const dragDistance = Math.sqrt(Math.pow(e.clientX - state.dragging.startX, 2) + Math.pow(e.clientY - state.dragging.startY, 2));
             state.dragging.isDown = false;
             canvas.classList.remove('grabbing');
 
-            if (state.dragging.creationRect) {
-                const rect = state.dragging.creationRect;
-                const dragDistance = Math.abs(rect.endX - rect.startX);
-
-                if (dragDistance < 5) { // It's a click
-                    const clickedDate = pxToDate(rect.startX);
+            if (dragDistance < 5) { // It's a click
+                if (state.dragging.activeItem) {
+                    showDetails(state.dragging.activeItem.item, state.dragging.activeItem.type);
+                } else if (state.dragging.dragType === 'create') {
+                    const clickedDate = pxToDate(state.dragging.creationRect.startX);
                     openEventModal(null, clickedDate);
-                } else { // It's a drag
+                }
+            } else { // It's a drag
+                if (state.dragging.dragType === 'create' && state.dragging.creationRect) {
+                    const rect = state.dragging.creationRect;
                     const startDate = pxToDate(Math.min(rect.startX, rect.endX));
                     const endDate = pxToDate(Math.max(rect.startX, rect.endX));
                     openPeriodModal(null, { startDate, endDate });
                 }
-                state.dragging.creationRect = null;
-                requestDraw();
             }
-            saveState(); // Save state after any drag/drop or creation action
+
+            state.dragging.activeItem = null;
+            state.dragging.creationRect = null;
+            state.dragging.dragType = null;
+            requestDraw();
+            saveState();
         });
 
         canvas.addEventListener('mouseleave', () => {
@@ -646,9 +690,10 @@
             if (state.dragging.isDown) {
                 state.dragging.isDown = false;
                 state.dragging.creationRect = null;
+                state.dragging.dragType = null;
                 canvas.classList.remove('grabbing');
                 canvas.style.cursor = 'grab';
-                saveState(); // Save state on mouse leave if dragging
+                saveState();
             }
             requestDraw();
         });
@@ -679,9 +724,9 @@
                     }
                     state.dragging.startX = e.clientX;
                     state.dragging.startY = e.clientY;
-                } else if (state.dragging.creationRect) {
+                } else if (state.dragging.dragType === 'create') {
                     state.dragging.creationRect.endX = mouseX;
-                } else {
+                } else if (state.dragging.dragType === 'pan') {
                     state.view.panX = state.dragging.scrollLeft + dx;
                     state.view.panY = state.dragging.scrollTop + dy;
                 }
@@ -698,7 +743,14 @@
                         canvas.style.cursor = 'move';
                     }
                 } else {
-                    canvas.style.cursor = 'crosshair';
+                    const axisY = (canvas.height / window.devicePixelRatio / 2) + state.view.panY;
+                    const distFromAxis = Math.abs(mouseY - axisY);
+                    const actionZoneThreshold = 50;
+                    if (distFromAxis < actionZoneThreshold) {
+                        canvas.style.cursor = 'crosshair';
+                    } else {
+                        canvas.style.cursor = 'grab';
+                    }
                 }
             }
             requestDraw();
@@ -779,11 +831,10 @@
                 else if (type === 'period') { state.periods = state.periods.filter(p => p.id !== id); }
                 closeModal(detailsModal);
                 requestDraw();
-                saveState(); // Save state after deleting an item
+                saveState();
             });
         });
 
-        // NEW: Clear All button listener
         clearAllBtn.addEventListener('click', () => {
             showConfirm('Er du sikker på at du vil slette ALLE hendelser og perioder? Denne handlingen kan ikke angres.', () => {
                 state.events = [];
@@ -871,7 +922,7 @@
                 state.events.push(data);
             }
             loadImage(data); requestDraw(); e.target.reset(); closeModal(eventModal);
-            saveState(); // Save state after adding/editing event
+            saveState();
         });
 
         document.getElementById('periodForm').addEventListener('submit', (e) => {
@@ -893,7 +944,7 @@
                 state.periods.push(data);
             }
             loadImage(data); requestDraw(); e.target.reset(); closeModal(periodModal);
-            saveState(); // Save state after adding/editing period
+            saveState();
         });
 
         // --- Import/Export Logic ---
@@ -929,14 +980,14 @@
             const allDates = [...eventDates, ...periodStartDates, ...periodEndDates];
             const min = Math.min(...allDates);
             const max = Math.max(...allDates);
-            const margin = (max - min) * 0.05 || 1; // 5% margin or 1 year if no range
+            const margin = (max - min) * 0.05 || 1;
             return { min: min - margin, max: max + margin };
         }
 
         document.getElementById('exportJpegAutoBtn').addEventListener('click', () => {
             const bounds = getTimelineBounds();
             const width = 1920;
-            const showDescriptions = false;
+            const showDescriptions = state.view.showDescriptions;
             const height = calculateExportHeight(bounds.min, bounds.max, width, showDescriptions);
             exportJpeg(bounds.min, bounds.max, width, height, showDescriptions);
             closeModal(exportModal);
@@ -947,31 +998,38 @@
             document.getElementById('exportStartDate').value = Math.floor(bounds.min);
             document.getElementById('exportEndDate').value = Math.ceil(bounds.max);
             document.getElementById('exportWidth').value = 1920;
-            document.getElementById('exportDescriptions').checked = false;
+            document.getElementById('exportDescriptions').checked = state.view.showDescriptions;
             updateCalculatedExportHeight();
             openModal(exportJpegSettingsModal);
         });
 
         function calculateExportHeight(start, end, width, showDescriptions) {
             if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return 400;
+
+            const eventLaneHeight = showDescriptions ? 100 : 50;
+            const periodLaneHeight = showDescriptions ? 110 : 55;
+
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
             tempCanvas.width = width;
+            
             const exportZoom = width / (end - start);
             const dateToPxExport = (date) => (date - start) * exportZoom;
-            const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 0, 0, tempCtx);
-            let descHeight = 0;
-            if (showDescriptions) {
-                tempCtx.font = '12px Inter';
-                [...state.events, ...state.periods].forEach(item => {
-                    if (item.description) {
-                        const lines = wrapText(tempCtx, item.description, 200).length;
-                        descHeight += lines * 14;
-                    }
-                });
-            }
-            const requiredHeight = (eventLanes * 50) + (periodLanes * 55) + (showDescriptions ? descHeight + 50 : 0) + 150;
-            return Math.max(400, Math.ceil(requiredHeight));
+
+            const originalShowDescriptions = state.view.showDescriptions;
+            state.view.showDescriptions = showDescriptions;
+            
+            const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 1000, 0, tempCtx);
+
+            state.view.showDescriptions = originalShowDescriptions;
+
+            const topSpace = (eventLanes * eventLaneHeight) + 30;
+            const bottomSpace = (periodLanes * periodLaneHeight) + 30;
+            const axisLabelsHeight = 30;
+
+            const totalHeight = topSpace + bottomSpace + axisLabelsHeight;
+            
+            return Math.max(400, Math.ceil(totalHeight));
         }
 
         function updateCalculatedExportHeight() {
@@ -1002,14 +1060,27 @@
                     const exportZoom = width / (end - start);
                     const dateToPxExport = (date) => (date - start) * exportZoom;
                     
+                    const originalShowDescriptions = state.view.showDescriptions;
+                    state.view.showDescriptions = showDescriptions;
                     calculateLayout(dateToPxExport, height, 0, tempCtx);
+                    state.view.showDescriptions = originalShowDescriptions;
+
                     drawOnTempCanvas(tempCtx, width, height, dateToPxExport, showDescriptions, start, end);
                     
-                    // The original data URL is used directly for the download
                     const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
                     
-                    const a = document.createElement('a'); a.href = dataUrl; a.download = 'tidslinje.jpeg';
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    const dataToExport = getTimelineData();
+                    const dataStr = EXPORT_DATA_MARKER + JSON.stringify(dataToExport);
+                    const exifObj = {"Exif": {[piexif.ExifIFD.UserComment]: dataStr}};
+                    const exifBytes = piexif.dump(exifObj);
+                    const dataWithExif = piexif.insert(exifBytes, dataUrl);
+
+                    const a = document.createElement('a');
+                    a.href = dataWithExif;
+                    a.download = 'tidslinje.jpeg';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
 
                 } catch (err) {
                     console.error("Export failed:", err); showConfirm("En feil oppstod under eksporten.", () => {});
@@ -1049,12 +1120,10 @@
                 tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = year % (interval * 10) === 0 ? 2 : 1; tempCtx.stroke();
                 tempCtx.fillText(year, x, axisY + tickHeight + 15);
             }
-
-            let yOffset = showDesc ? 50 : 0;
             
             state.events.forEach(event => {
                 const x = dateToPxFn(event.date);
-                const eventY = event.y - (canvas.height/window.devicePixelRatio / 2) - state.view.panY + axisY - yOffset;
+                const eventY = event.y;
                 
                 tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
                 tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
@@ -1074,7 +1143,7 @@
 
             state.periods.forEach(period => {
                 const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
-                const periodY = period.y - (canvas.height/window.devicePixelRatio / 2) - state.view.panY + axisY + yOffset;
+                const periodY = period.y;
                 
                 tempCtx.fillStyle = 'rgba(66, 153, 225, 0.7)'; tempCtx.strokeStyle = '#2B6CB0'; tempCtx.lineWidth = 2;
                 tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
@@ -1121,10 +1190,11 @@
                     let importedData;
                     if (file.type === 'image/jpeg' || file.name.toLowerCase().endsWith('.jpeg') || file.name.toLowerCase().endsWith('.jpg')) {
                         const dataUrl = event.target.result;
-                        const markerIndex = dataUrl.lastIndexOf(EXPORT_DATA_MARKER);
-                        if (markerIndex !== -1) {
-                            const base64Data = dataUrl.substring(markerIndex + EXPORT_DATA_MARKER.length);
-                            const jsonStr = decodeURIComponent(escape(atob(base64Data)));
+                        const exifObj = piexif.load(dataUrl);
+                        const dataStr = exifObj.Exif[piexif.ExifIFD.UserComment];
+
+                        if (dataStr && dataStr.startsWith(EXPORT_DATA_MARKER)) {
+                            const jsonStr = dataStr.substring(EXPORT_DATA_MARKER.length);
                             importedData = JSON.parse(jsonStr);
                         } else {
                             throw new Error('Ingen tidslinjedata funnet i bildet.');
@@ -1133,19 +1203,24 @@
                         importedData = JSON.parse(event.target.result);
                     }
                     
-                    if (importedData.timelineStart && importedData.timelineEnd && importedData.events && importedData.periods) {
-                        state.timelineStart = importedData.timelineStart;
-                        state.timelineEnd = importedData.timelineEnd;
-                        state.events = importedData.events;
-                        state.periods = importedData.periods;
+                    if (importedData.events && importedData.periods) {
+                        state.events.push(...importedData.events);
+                        state.periods.push(...importedData.periods);
+                        
+                        const bounds = getTimelineBounds();
+                        state.timelineStart = Math.floor(bounds.min);
+                        state.timelineEnd = Math.ceil(bounds.max);
+
                         startDateInput.value = state.timelineStart;
                         endDateInput.value = state.timelineEnd;
-                        state.images = {};
-                        [...state.events, ...state.periods].forEach(loadImage);
+                        
+                        [...importedData.events, ...importedData.periods].forEach(loadImage);
+                        
                         const totalYears = state.timelineEnd - state.timelineStart;
                         state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
-                        state.view.panX = 0; state.view.panY = 0; requestDraw();
-                        saveState(); // Save imported state
+                        state.view.panX = 0; state.view.panY = 0; 
+                        requestDraw();
+                        saveState();
                     } else { throw new Error('Invalid timeline file format.'); }
                 } catch (err) {
                     showConfirm('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format. Detaljer: ' + err.message, () => {});
