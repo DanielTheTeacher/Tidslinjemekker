@@ -92,7 +92,7 @@
                 <input type="number" id="endDate" value="2030" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                 <button id="setDateRange" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm font-semibold">Vis disse årene</button>
             </div>
-              <!-- Zoom Sensitivity -->
+             <!-- Zoom Sensitivity -->
             <div class="flex items-center gap-2">
                 <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå:</label>
                 <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="1" class="w-24">
@@ -350,8 +350,9 @@
             const dataToSave = {
                 timelineStart: state.timelineStart,
                 timelineEnd: state.timelineEnd,
+                // Remove calculated layout properties before saving
                 events: state.events.map(({lane, y, ...rest}) => rest),
-                periods: state.periods.map(({lane, y, ...rest}) => rest),
+                periods: state.periods.map(({lane, y, descriptionLines, ...rest}) => rest),
             };
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
             console.log('Tidslinje lagret automatisk.');
@@ -413,14 +414,12 @@
         }
         
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
+            // --- Event Layout (remains mostly the same) ---
             const eventLaneHeight = state.view.showDescriptions ? 100 : 50;
-            const periodLaneHeight = state.view.showDescriptions ? 95 : 55; // Tightened up
             const labelPadding = 20;
 
             context.font = 'bold 14px Inter';
             const sortedEvents = [...state.events].sort((a, b) => a.date - b.date);
-            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
-
             const eventLanes = [];
             sortedEvents.forEach(event => {
                 const eventX = coordFn(event.date);
@@ -442,27 +441,71 @@
                 event.y = (viewHeight / 2) + panY - 30 - (event.lane * eventLaneHeight);
             });
 
-            const periodLanes = [];
+            // --- New Dynamic Period Layout Logic ---
+            const periodBaseHeight = 40;
+            const periodVSpacing = 15; // Vertical space between period rows
+            const periodDescLineHeight = 14;
+            const periodDescTopMargin = 15;
+
+            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
+            const periodLanes = []; // This will be an array of arrays of periods
+            const laneEndPositions = []; // Tracks the end x-coordinate for each lane
+
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
                 const endX = coordFn(period.endDate);
                 let placed = false;
-                for (let i = 0; i < periodLanes.length; i++) {
-                    if (startX > periodLanes[i] + labelPadding) {
+                for (let i = 0; i < laneEndPositions.length; i++) {
+                    if (startX > laneEndPositions[i] + labelPadding) {
                         period.lane = i;
-                        periodLanes[i] = endX;
+                        if (!periodLanes[i]) periodLanes[i] = [];
+                        periodLanes[i].push(period);
+                        laneEndPositions[i] = endX;
                         placed = true;
                         break;
                     }
                 }
                 if (!placed) {
-                    period.lane = periodLanes.length;
-                    periodLanes.push(endX);
+                    period.lane = laneEndPositions.length;
+                    periodLanes.push([period]);
+                    laneEndPositions.push(endX);
                 }
-                period.y = (viewHeight / 2) + panY + 30 + (period.lane * periodLaneHeight);
             });
+
+            // Now calculate Y positions based on dynamic lane heights
+            let currentY = (viewHeight / 2) + panY + 30;
+
+            periodLanes.forEach(lane => {
+                let maxLaneHeight = periodBaseHeight; // Minimum height is the bar itself
+
+                // First pass in the lane: assign base Y and calculate description heights
+                lane.forEach(period => {
+                    period.y = currentY;
+                    let descriptionHeight = 0;
+                    if (state.view.showDescriptions && period.description) {
+                        const width = coordFn(period.endDate) - coordFn(period.startDate);
+                        const wrapWidth = Math.max(1, width - 20);
+                        const lines = wrapText(context, period.description, wrapWidth);
+                        period.descriptionLines = lines; // Store for drawing
+                        descriptionHeight = lines.length * periodDescLineHeight;
+                    } else {
+                        period.descriptionLines = [];
+                    }
+                    
+                    const totalOccupiedHeight = periodBaseHeight + (descriptionHeight > 0 ? periodDescTopMargin + descriptionHeight : 0);
+                    
+                    if (totalOccupiedHeight > maxLaneHeight) {
+                        maxLaneHeight = totalOccupiedHeight;
+                    }
+                });
+
+                // Update currentY for the next lane
+                currentY += maxLaneHeight + periodVSpacing;
+            });
+
             return { eventLanes: eventLanes.length, periodLanes: periodLanes.length };
         }
+
 
         function draw() {
             const dpr = window.devicePixelRatio;
@@ -578,7 +621,11 @@
                 ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.roundRect(startX, period.y, width, periodHeight, 8); ctx.fill(); ctx.stroke();
 
-                ctx.fillStyle = 'white'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                // FIX: Use a dark color for text for better contrast
+                ctx.fillStyle = '#1A202C'; 
+                ctx.font = 'bold 14px Inter'; 
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
                 
                 const textFits = ctx.measureText(period.title).width < width - 10;
                 if (state.view.zoom > 0.5 && textFits) {
@@ -589,14 +636,17 @@
                     ctx.fillText(period.title, startX + width / 2, period.y - 10);
                 }
 
-                if (state.view.showDescriptions && period.description) {
+                // FIX: Use pre-calculated description lines from layout phase
+                if (state.view.showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
                     ctx.font = '12px Inter';
                     ctx.fillStyle = '#4A5568';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'alphabetic';
-                    const lines = wrapText(ctx, period.description, width - 20);
+                    const periodDescLineHeight = 14;
+                    const periodDescTopMargin = 15;
+                    const lines = period.descriptionLines;
                     lines.forEach((line, i) => {
-                        ctx.fillText(line, startX + width / 2, period.y + 40 + 15 + (i * 14));
+                        ctx.fillText(line, startX + width / 2, period.y + periodHeight + periodDescTopMargin + (i * periodDescLineHeight));
                     });
                 }
             });
@@ -624,7 +674,7 @@
                 state.view.panX = 0; state.view.panY = 0; requestDraw();
                 saveState();
             } else {
-                showConfirm('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.', () => {});
+                showConfirm('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.', () => {}, true);
             }
         });
 
@@ -705,7 +755,9 @@
                     const rect = state.dragging.creationRect;
                     const startDate = pxToDate(Math.min(rect.startX, rect.endX));
                     const endDate = pxToDate(Math.max(rect.startX, rect.endX));
-                    openPeriodModal(null, { startDate, endDate });
+                    if (endDate - startDate > 0.1) { // Ensure it's not just a click
+                        openPeriodModal(null, { startDate, endDate });
+                    }
                 }
             }
 
@@ -875,21 +927,31 @@
             });
         });
 
-        function showConfirm(message, onConfirm) {
+        function showConfirm(message, onConfirm, isInfo = false) {
             document.getElementById('confirmText').textContent = message;
-            document.getElementById('confirmTitle').textContent = 'Er du sikker?';
+            document.getElementById('confirmTitle').textContent = isInfo ? 'Informasjon' : 'Er du sikker?';
+            const okBtn = document.getElementById('confirmOk');
+            okBtn.textContent = isInfo ? 'OK' : 'Slett';
+            okBtn.className = isInfo 
+                ? 'px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700' 
+                : 'px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700';
+            
             openModal(confirmModal);
-            const confirmOk = document.getElementById('confirmOk');
+
             const confirmCancel = document.getElementById('confirmCancel');
+            
             const okListener = () => { onConfirm(); closeModal(confirmModal); cleanup(); };
             const cancelListener = () => { closeModal(confirmModal); cleanup(); };
+            
             const cleanup = () => {
-                confirmOk.removeEventListener('click', okListener);
+                okBtn.removeEventListener('click', okListener);
                 confirmCancel.removeEventListener('click', cancelListener);
             };
-            confirmOk.addEventListener('click', okListener, { once: true });
+            
+            okBtn.addEventListener('click', okListener, { once: true });
             confirmCancel.addEventListener('click', cancelListener, { once: true });
         }
+
 
         function openEventModal(event = null, date = null) {
             document.getElementById('eventForm').reset();
@@ -974,7 +1036,7 @@
                 img: document.getElementById('periodImg').value,
                 color: document.getElementById('periodColor').value,
             };
-            if (data.startDate >= data.endDate) { showConfirm('Startdato må være før sluttdato.', () => {}); return; }
+            if (data.startDate >= data.endDate) { showConfirm('Startdato må være før sluttdato.', () => {}, true); return; }
             if (periodId) {
                 const index = state.periods.findIndex(p => p.id == periodId);
                 if (index !== -1) state.periods[index] = { ...state.periods[index], ...data };
@@ -994,7 +1056,7 @@
                 timelineStart: state.timelineStart,
                 timelineEnd: state.timelineEnd,
                 events: state.events.map(({lane, y, ...rest}) => rest),
-                periods: state.periods.map(({lane, y, ...rest}) => rest),
+                periods: state.periods.map(({lane, y, descriptionLines, ...rest}) => rest),
             };
         }
 
@@ -1036,29 +1098,73 @@
         function calculateExportHeight(start, end, width, showDescriptions) {
             if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return 400;
 
-            const eventLaneHeight = showDescriptions ? 100 : 50;
-            const periodLaneHeight = showDescriptions ? 95 : 55;
-
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
             tempCanvas.width = width;
-            
+            tempCtx.font = '12px Inter';
+
             const exportZoom = width / (end - start);
             const dateToPxExport = (date) => (date - start) * exportZoom;
-
-            const originalShowDescriptions = state.view.showDescriptions;
-            state.view.showDescriptions = showDescriptions;
             
-            const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 1000, 0, tempCtx);
-
-            state.view.showDescriptions = originalShowDescriptions;
-
+            // Calculate event space (can be simplified for height calculation)
+            const eventLaneHeight = showDescriptions ? 100 : 50;
+            const { eventLanes } = calculateLayout(dateToPxExport, 1000, 0, tempCtx);
             const topSpace = (eventLanes * eventLaneHeight) + 30;
-            const bottomSpace = (periodLanes * periodLaneHeight) + 30;
-            const axisLabelsHeight = 30;
-
-            const totalHeight = topSpace + bottomSpace + axisLabelsHeight;
             
+            // Calculate period space with dynamic heights
+            const periodBaseHeight = 40;
+            const periodVSpacing = 15;
+            const periodDescLineHeight = 14;
+            const periodDescTopMargin = 15;
+            const labelPadding = 20;
+
+            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
+            const periodLanes = [];
+            const laneEndPositions = [];
+
+            sortedPeriods.forEach(period => {
+                const startX = dateToPxExport(period.startDate);
+                const endX = dateToPxExport(period.endDate);
+                let placed = false;
+                for (let i = 0; i < laneEndPositions.length; i++) {
+                    if (startX > laneEndPositions[i] + labelPadding) {
+                        if (!periodLanes[i]) periodLanes[i] = [];
+                        periodLanes[i].push(period);
+                        laneEndPositions[i] = endX;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    periodLanes.push([period]);
+                    laneEndPositions.push(endX);
+                }
+            });
+
+            let totalPeriodsHeight = 0;
+            periodLanes.forEach(lane => {
+                let maxLaneHeight = periodBaseHeight;
+                if (showDescriptions) {
+                    lane.forEach(period => {
+                        let descriptionHeight = 0;
+                        if (period.description) {
+                            const pWidth = dateToPxExport(period.endDate) - dateToPxExport(period.startDate);
+                            const wrapWidth = Math.max(1, pWidth - 20);
+                            const lines = wrapText(tempCtx, period.description, wrapWidth);
+                            descriptionHeight = lines.length * periodDescLineHeight;
+                        }
+                        const totalOccupiedHeight = periodBaseHeight + (descriptionHeight > 0 ? periodDescTopMargin + descriptionHeight : 0);
+                        if (totalOccupiedHeight > maxLaneHeight) {
+                            maxLaneHeight = totalOccupiedHeight;
+                        }
+                    });
+                }
+                totalPeriodsHeight += maxLaneHeight + periodVSpacing;
+            });
+
+            const axisLabelsHeight = 30;
+            const totalHeight = topSpace + totalPeriodsHeight + axisLabelsHeight;
+
             return Math.max(400, Math.ceil(totalHeight));
         }
 
@@ -1076,7 +1182,7 @@
 
         async function exportJpeg(start, end, width, height, showDescriptions) {
             if (isNaN(start) || isNaN(end) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0 || start >= end) {
-                showConfirm('Vennligst fyll inn gyldige eksportinnstillinger.', () => {}); return;
+                showConfirm('Vennligst fyll inn gyldige eksportinnstillinger.', () => {}, true); return;
             }
             document.getElementById('exportSpinner').style.display = 'block';
             document.getElementById('generateJpegBtn').disabled = true;
@@ -1090,6 +1196,7 @@
                     const exportZoom = width / (end - start);
                     const dateToPxExport = (date) => (date - start) * exportZoom;
                     
+                    // Recalculate layout with export dimensions so `period.y` is correct
                     const originalShowDescriptions = state.view.showDescriptions;
                     state.view.showDescriptions = showDescriptions;
                     calculateLayout(dateToPxExport, height, 0, tempCtx);
@@ -1113,7 +1220,7 @@
                     document.body.removeChild(a);
 
                 } catch (err) {
-                    console.error("Export failed:", err); showConfirm("En feil oppstod under eksporten.", () => {});
+                    console.error("Export failed:", err); showConfirm("En feil oppstod under eksporten.", () => {}, true);
                 } finally {
                     document.getElementById('exportSpinner').style.display = 'none';
                     document.getElementById('generateJpegBtn').disabled = false;
@@ -1123,7 +1230,8 @@
         }
 
         function wrapText(context, text, maxWidth) {
-            const words = text.split(' '); let lines = []; let currentLine = words[0];
+            if (maxWidth <= 0) return [text]; // Avoid infinite loops
+            const words = text.split(' '); let lines = []; let currentLine = words[0] || '';
             for (let i = 1; i < words.length; i++) {
                 const word = words[i]; const width = context.measureText(currentLine + " " + word).width;
                 if (width < maxWidth) { currentLine += " " + word; } else { lines.push(currentLine); currentLine = word; }
@@ -1138,7 +1246,7 @@
             const tempState = { timelineStart: start, timelineEnd: end, view: { zoom: width / (end - start), markerDensity: 1 } };
             const tempPxToDate = (px) => (px / tempState.view.zoom) + tempState.timelineStart;
 
-            const interval = getMarkerInterval.call({state: tempState, canvas: {width: width}});
+            const interval = getMarkerInterval.call({state: tempState, canvas: {width: width, getBoundingClientRect: () => ({left:0})}});
             const startYear = Math.floor(tempPxToDate(0) / interval) * interval;
             const endYear = Math.ceil(tempPxToDate(width) / interval) * interval;
             tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center'; tempCtx.font = '12px Inter';
@@ -1154,7 +1262,7 @@
             state.events.forEach(event => {
                 const color = event.color || '#38A169';
                 const x = dateToPxFn(event.date);
-                const eventY = event.y;
+                const eventY = event.y; // Use y calculated for export context
                 
                 tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = color; tempCtx.lineWidth = 2; tempCtx.stroke();
                 tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = color; tempCtx.fill();
@@ -1164,47 +1272,42 @@
                     tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
                     const lines = wrapText(tempCtx, event.description, 200);
                     lines.forEach((line, i) => tempCtx.fillText(line, x, eventY + 15 + (i * 14)));
-                    if (event.img && state.images[event.img]) {
-                        const img = state.images[event.img];
-                        const imgSize = 40;
-                        tempCtx.drawImage(img, x - imgSize/2, eventY + 15 + (lines.length * 14) + 5, imgSize, imgSize * img.height / img.width);
-                    }
                 }
             });
 
             state.periods.forEach(period => {
                 const color = period.color || '#4299E1';
                 const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
-                const periodY = period.y;
+                const periodY = period.y; // Use y calculated for export context
+                const periodHeight = 40;
                 
                 tempCtx.fillStyle = hexToRgba(color, 0.7); 
                 tempCtx.strokeStyle = darkenColor(color, 20); 
                 tempCtx.lineWidth = 2;
-                tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
+                tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodHeight, 8); tempCtx.fill(); tempCtx.stroke();
                 
                 tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center';
                 const textFits = tempCtx.measureText(period.title).width < pWidth - 10;
                 if (textFits) {
-                    tempCtx.fillStyle = 'white'; tempCtx.textBaseline = 'middle';
-                    tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, periodY, pWidth, 40); tempCtx.clip();
-                    tempCtx.fillText(period.title, startX + pWidth / 2, periodY + 20); tempCtx.restore();
+                    tempCtx.fillStyle = '#1A202C'; // Dark text color
+                    tempCtx.textBaseline = 'middle';
+                    tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, periodY, pWidth, periodHeight); tempCtx.clip();
+                    tempCtx.fillText(period.title, startX + pWidth / 2, periodY + periodHeight / 2); tempCtx.restore();
                 } else {
                     tempCtx.fillStyle = darkenColor(color, 20); 
                     tempCtx.textBaseline = 'alphabetic';
                     tempCtx.fillText(period.title, startX + pWidth / 2, periodY - 10);
                 }
-                if (showDesc && period.description) {
+                if (showDesc && period.descriptionLines && period.descriptionLines.length > 0) {
                     tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
-                    const lines = wrapText(tempCtx, period.description, 200);
-                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, periodY + 40 + 15 + (i * 14)));
-                    if (period.img && state.images[period.img]) {
-                        const img = state.images[period.img];
-                        const imgSize = 40;
-                        tempCtx.drawImage(img, startX + pWidth/2 - imgSize/2, periodY + 40 + 15 + (lines.length * 14) + 5, imgSize, imgSize * img.height / img.width);
-                    }
+                    const lines = period.descriptionLines;
+                    const periodDescLineHeight = 14;
+                    const periodDescTopMargin = 15;
+                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, periodY + periodHeight + periodDescTopMargin + (i * periodDescLineHeight)));
                 }
             });
         }
+
 
         document.getElementById('generateJpegBtn').addEventListener('click', () => {
             const start = parseFloat(document.getElementById('exportStartDate').value);
@@ -1258,7 +1361,7 @@
                         saveState();
                     } else { throw new Error('Invalid timeline file format.'); }
                 } catch (err) {
-                    showConfirm('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format. Detaljer: ' + err.message, () => {});
+                    showConfirm('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format. Detaljer: ' + err.message, () => {}, true);
                     console.error(err);
                 }
             };
