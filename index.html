@@ -56,6 +56,22 @@
             cursor: pointer;
             border-radius: 50%;
         }
+        input[type="color"] {
+        	-webkit-appearance: none;
+        	border: none;
+        	width: 40px;
+        	height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+        	padding: 0;
+            border-radius: 50%;
+        }
+        input[type="color"]::-webkit-color-swatch {
+        	border: 1px solid #e2e8f0;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex flex-col h-screen overflow-hidden">
@@ -140,9 +156,15 @@
                     <label for="eventDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
                     <textarea id="eventDesc" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
                 </div>
-                <div class="mb-4">
-                    <label for="eventImg" class="block text-sm font-medium text-gray-700">Bilde-URL (Valgfritt)</label>
-                    <input type="url" id="eventImg" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                <div class="flex gap-4">
+                    <div class="mb-4 flex-grow">
+                        <label for="eventImg" class="block text-sm font-medium text-gray-700">Bilde-URL (Valgfritt)</label>
+                        <input type="url" id="eventImg" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="mb-4">
+                        <label for="eventColor" class="block text-sm font-medium text-gray-700 text-center">Farge</label>
+                        <input type="color" id="eventColor" value="#38A169" class="mt-1">
+                    </div>
                 </div>
                 <div class="flex justify-end gap-4">
                     <button type="button" id="cancelEvent" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
@@ -176,9 +198,15 @@
                     <label for="periodDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
                     <textarea id="periodDesc" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
                 </div>
-                <div class="mb-4">
-                    <label for="periodImg" class="block text-sm font-medium text-gray-700">Bilde-URL (Valgfritt)</label>
-                    <input type="url" id="periodImg" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                 <div class="flex gap-4">
+                    <div class="mb-4 flex-grow">
+                        <label for="periodImg" class="block text-sm font-medium text-gray-700">Bilde-URL (Valgfritt)</label>
+                        <input type="url" id="periodImg" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="mb-4">
+                        <label for="periodColor" class="block text-sm font-medium text-gray-700 text-center">Farge</label>
+                        <input type="color" id="periodColor" value="#4299E1" class="mt-1">
+                    </div>
                 </div>
                 <div class="flex justify-end gap-4">
                     <button type="button" id="cancelPeriod" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Avbryt</button>
@@ -194,7 +222,6 @@
             <h2 class="text-2xl font-bold mb-4">Eksporter tidslinje</h2>
             <p class="text-gray-600 mb-6">Velg eksportformat.</p>
             <div class="flex flex-col gap-4">
-                <button id="exportJsonBtn" class="w-full px-4 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold">Last ned datafil (.json)</button>
                 <button id="exportJpegAutoBtn" class="w-full px-4 py-3 bg-teal-500 text-white rounded-md hover:bg-teal-600 font-semibold">Last ned bilde (Auto)</button>
                 <button id="exportJpegSettingsBtn" class="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 font-semibold text-sm">Manuelle innstillinger for bilde...</button>
             </div>
@@ -387,7 +414,7 @@
         
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
             const eventLaneHeight = state.view.showDescriptions ? 100 : 50;
-            const periodLaneHeight = state.view.showDescriptions ? 110 : 55;
+            const periodLaneHeight = state.view.showDescriptions ? 95 : 55; // Tightened up
             const labelPadding = 20;
 
             context.font = 'bold 14px Inter';
@@ -520,9 +547,10 @@
 
         function drawEvents(axisY) {
             state.events.forEach(event => {
+                const color = event.color || '#38A169';
                 const x = dateToPx(event.date);
-                ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = '#38A169'; ctx.lineWidth = 2; ctx.stroke();
-                ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = '#38A169'; ctx.fill();
+                ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
                 ctx.fillStyle = '#2D3748'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(event.title, x, event.y - 15);
 
                 if (state.view.showDescriptions && event.description) {
@@ -540,11 +568,14 @@
         function drawPeriods(axisY) {
             const periodHeight = 40;
             state.periods.forEach(period => {
+                const color = period.color || '#4299E1';
                 const startX = dateToPx(period.startDate);
                 const endX = dateToPx(period.endDate);
                 const width = endX - startX;
 
-                ctx.fillStyle = 'rgba(66, 153, 225, 0.7)'; ctx.strokeStyle = '#2B6CB0'; ctx.lineWidth = 2;
+                ctx.fillStyle = hexToRgba(color, 0.7); 
+                ctx.strokeStyle = darkenColor(color, 20); 
+                ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.roundRect(startX, period.y, width, periodHeight, 8); ctx.fill(); ctx.stroke();
 
                 ctx.fillStyle = 'white'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -554,7 +585,7 @@
                     ctx.save(); ctx.beginPath(); ctx.rect(startX, period.y, width, periodHeight); ctx.clip();
                     ctx.fillText(period.title, startX + width / 2, period.y + periodHeight / 2); ctx.restore();
                 } else {
-                    ctx.fillStyle = '#2B6CB0';
+                    ctx.fillStyle = darkenColor(color, 20);
                     ctx.fillText(period.title, startX + width / 2, period.y - 10);
                 }
 
@@ -862,6 +893,7 @@
 
         function openEventModal(event = null, date = null) {
             document.getElementById('eventForm').reset();
+            const colorPicker = document.getElementById('eventColor');
             if (event) { // Editing
                 document.getElementById('eventModalTitle').textContent = 'Rediger hendelse';
                 document.getElementById('saveEventBtn').textContent = 'Lagre endringer';
@@ -870,10 +902,12 @@
                 document.getElementById('eventTitle').value = event.title;
                 document.getElementById('eventDesc').value = event.description;
                 document.getElementById('eventImg').value = event.img;
+                colorPicker.value = event.color || '#38A169';
             } else { // Creating new
                 document.getElementById('eventModalTitle').textContent = 'Legg til ny hendelse';
                 document.getElementById('saveEventBtn').textContent = 'Legg til hendelse';
                 document.getElementById('eventId').value = '';
+                colorPicker.value = '#38A169';
                 if (date) document.getElementById('eventDate').value = parseFloat(date.toFixed(2));
             }
             openModal(eventModal);
@@ -881,6 +915,7 @@
 
         function openPeriodModal(period = null, dates = null) {
             document.getElementById('periodForm').reset();
+            const colorPicker = document.getElementById('periodColor');
             if (period) { // Editing
                 document.getElementById('periodModalTitle').textContent = 'Rediger periode';
                 document.getElementById('savePeriodBtn').textContent = 'Lagre endringer';
@@ -890,10 +925,12 @@
                 document.getElementById('periodTitle').value = period.title;
                 document.getElementById('periodDesc').value = period.description;
                 document.getElementById('periodImg').value = period.img;
+                colorPicker.value = period.color || '#4299E1';
             } else { // Creating new
                 document.getElementById('periodModalTitle').textContent = 'Legg til ny periode';
                 document.getElementById('savePeriodBtn').textContent = 'Legg til periode';
                 document.getElementById('periodId').value = '';
+                colorPicker.value = '#4299E1';
                 if (dates) {
                     document.getElementById('periodStartDate').value = parseFloat(dates.startDate.toFixed(2));
                     document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(2));
@@ -913,6 +950,7 @@
                 title: document.getElementById('eventTitle').value,
                 description: document.getElementById('eventDesc').value,
                 img: document.getElementById('eventImg').value,
+                color: document.getElementById('eventColor').value,
             };
             if (eventId) {
                 const index = state.events.findIndex(ev => ev.id == eventId);
@@ -934,6 +972,7 @@
                 title: document.getElementById('periodTitle').value,
                 description: document.getElementById('periodDesc').value,
                 img: document.getElementById('periodImg').value,
+                color: document.getElementById('periodColor').value,
             };
             if (data.startDate >= data.endDate) { showConfirm('Startdato må være før sluttdato.', () => {}); return; }
             if (periodId) {
@@ -960,15 +999,6 @@
         }
 
         exportBtn.addEventListener('click', () => openModal(exportModal));
-        document.getElementById('exportJsonBtn').addEventListener('click', () => {
-            const dataToExport = getTimelineData();
-            const dataStr = JSON.stringify(dataToExport, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = 'tidslinje.json';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-            closeModal(exportModal);
-        });
         
         function getTimelineBounds() {
             if (state.events.length === 0 && state.periods.length === 0) {
@@ -1007,7 +1037,7 @@
             if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return 400;
 
             const eventLaneHeight = showDescriptions ? 100 : 50;
-            const periodLaneHeight = showDescriptions ? 110 : 55;
+            const periodLaneHeight = showDescriptions ? 95 : 55;
 
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
@@ -1122,11 +1152,12 @@
             }
             
             state.events.forEach(event => {
+                const color = event.color || '#38A169';
                 const x = dateToPxFn(event.date);
                 const eventY = event.y;
                 
-                tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
-                tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
+                tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = color; tempCtx.lineWidth = 2; tempCtx.stroke();
+                tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = color; tempCtx.fill();
                 tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, eventY - 15);
                 
                 if (showDesc && event.description) {
@@ -1142,10 +1173,13 @@
             });
 
             state.periods.forEach(period => {
+                const color = period.color || '#4299E1';
                 const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
                 const periodY = period.y;
                 
-                tempCtx.fillStyle = 'rgba(66, 153, 225, 0.7)'; tempCtx.strokeStyle = '#2B6CB0'; tempCtx.lineWidth = 2;
+                tempCtx.fillStyle = hexToRgba(color, 0.7); 
+                tempCtx.strokeStyle = darkenColor(color, 20); 
+                tempCtx.lineWidth = 2;
                 tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
                 
                 tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center';
@@ -1155,7 +1189,8 @@
                     tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, periodY, pWidth, 40); tempCtx.clip();
                     tempCtx.fillText(period.title, startX + pWidth / 2, periodY + 20); tempCtx.restore();
                 } else {
-                    tempCtx.fillStyle = '#2B6CB0'; tempCtx.textBaseline = 'alphabetic';
+                    tempCtx.fillStyle = darkenColor(color, 20); 
+                    tempCtx.textBaseline = 'alphabetic';
                     tempCtx.fillText(period.title, startX + pWidth / 2, periodY - 10);
                 }
                 if (showDesc && period.description) {
@@ -1234,6 +1269,31 @@
             }
             importFileInput.value = '';
         });
+
+        // --- Helper Functions ---
+        function hexToRgba(hex, alpha) {
+            let r = 0, g = 0, b = 0;
+            if (hex.length == 4) {
+                r = "0x" + hex[1] + hex[1];
+                g = "0x" + hex[2] + hex[2];
+                b = "0x" + hex[3] + hex[3];
+            } else if (hex.length == 7) {
+                r = "0x" + hex[1] + hex[2];
+                g = "0x" + hex[3] + hex[4];
+                b = "0x" + hex[5] + hex[6];
+            }
+            return `rgba(${+r},${+g},${+b},${alpha})`;
+        }
+
+        function darkenColor(hex, percent) {
+            const f = parseInt(hex.slice(1), 16),
+                t = percent < 0 ? 0 : 255,
+                p = percent < 0 ? percent * -1 : percent,
+                R = f >> 16,
+                G = (f >> 8) & 0x00FF,
+                B = f & 0x0000FF;
+            return "#" + (0x1000000 + (Math.round((t - R) * p) + R) * 0x10000 + (Math.round((t - G) * p) + G) * 0x100 + (Math.round((t - B) * p) + B)).toString(16).slice(1);
+        }
 
         // --- Initial Setup ---
         window.addEventListener('resize', resizeCanvas);
