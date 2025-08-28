@@ -551,10 +551,15 @@
             });
 
             const sortedPeriods = [...state.periods].sort((a, b) => (a.renderOrder || 0) - (b.renderOrder || 0));
+            
+            // Pass 1: Calculate heights and assign lanes
+            const lanes = []; // array of arrays of periods
+            
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
                 const endX = coordFn(period.endDate);
-
+                
+                // Calculate period height
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 const yearRangeHeight = 10;
                 
@@ -576,23 +581,45 @@
 
                 period.height = titleHeight + yearRangeHeight + descriptionHeight + imageHeight + (paddingY * 2);
 
-                let assignedLane = -1;
-                for (let i = 0; i < lanesDown.length; i++) {
-                    if (startX >= lanesDown[i]) {
-                        assignedLane = i;
+                let assignedLaneIndex = -1;
+                for (let i = 0; i < lanes.length; i++) {
+                    const lane = lanes[i];
+                    let overlaps = false;
+                    for (const p of lane) {
+                        if (Math.max(startX, coordFn(p.startDate)) < Math.min(endX, coordFn(p.endDate))) {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+                    if (!overlaps) {
+                        assignedLaneIndex = i;
                         break;
                     }
                 }
 
-                if (assignedLane === -1) {
-                    assignedLane = lanesDown.length;
-                    lanesDown.push(0);
+                if (assignedLaneIndex === -1) {
+                    assignedLaneIndex = lanes.length;
+                    lanes.push([]);
                 }
                 
-                period.lane = assignedLane;
-                period.y = (viewHeight / 2) + panY + 30 + (assignedLane * (period.height));
-                lanesDown[assignedLane] = endX;
+                lanes[assignedLaneIndex].push(period);
             });
+
+            // Pass 2: Calculate lane heights and set y positions
+            const laneHeights = lanes.map(lane => {
+                if (lane.length === 0) return 0;
+                return Math.max(...lane.map(p => p.height));
+            });
+            
+            let currentY = (viewHeight / 2) + panY + 30;
+            for (let i = 0; i < lanes.length; i++) {
+                const laneHeight = laneHeights[i];
+                for (const period of lanes[i]) {
+                    period.y = currentY;
+                    period.height = laneHeight; 
+                }
+                currentY += laneHeight;
+            }
         }
 
         function drawHoverYearIndicator() {
@@ -887,7 +914,7 @@
                 const titleX = startX + width / 2;
                 let titleY = period.y + 15;
                 
-                const yearRangeText = `(${formatYear(period.startDate)} - ${formatYear(period.endDate)})`;
+                const yearRangeText = `(${formatYear(period.startDate, period.isApproximate)} - ${formatYear(period.endDate, period.isApproximate)})`;
                 context.font = '9px Inter'; // Set font for width measurement
                 const yearRangeWidth = context.measureText(yearRangeText).width;
                 if (isTitleOutOfBounds || yearRangeWidth > width - 20) {
@@ -1385,7 +1412,7 @@
                 document.getElementById('eventId').value = '';
                 descTextarea.value = '';
                 colorPicker.value = '#38A169';
-                if (date) document.getElementById('eventDate').value = parseFloat(date.toFixed(2));
+                if (date) document.getElementById('eventDate').value = parseFloat(date.toFixed(1));
             }
             updateCharCount();
             openModal(eventModal);
@@ -1422,8 +1449,8 @@
                 colorPicker.value = '#4299E1';
                 isApproximateCheckbox.checked = false;
                 if (dates) {
-                    document.getElementById('periodStartDate').value = parseFloat(dates.startDate.toFixed(2));
-                    document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(2));
+                    document.getElementById('periodStartDate').value = parseFloat(dates.startDate.toFixed(1));
+                    document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(1));
                 }
             }
             updateCharCount();
@@ -1802,12 +1829,13 @@
         });
 
         // --- Helper Functions ---
-        function formatYear(year) {
+        function formatYear(year, isApproximate = false) {
             const roundedYear = Math.round(year);
+            const prefix = isApproximate ? 'ca. ' : '';
             if (roundedYear < 0) {
-                return `${Math.abs(roundedYear)} fvt.`;
+                return `${prefix}${Math.abs(roundedYear)} fvt.`;
             }
-            return `${roundedYear}`;
+            return `${prefix}${roundedYear}`;
         }
 
         function hexToRgba(hex, alpha) {
