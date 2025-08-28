@@ -74,7 +74,7 @@
                 <input type="number" id="endDate" value="2030" class="w-24 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                 <button id="setDateRange" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 text-sm font-semibold">Vis disse årene</button>
             </div>
-             <!-- Zoom Sensitivity -->
+              <!-- Zoom Sensitivity -->
             <div class="flex items-center gap-2">
                 <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå:</label>
                 <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="1" class="w-24">
@@ -87,7 +87,9 @@
             <button id="addPeriodBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-sm font-semibold">Legg til periode</button>
             <button id="exportBtn" class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-600 text-sm font-semibold">Eksporter</button>
             <button id="importBtn" class="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-600 text-sm font-semibold">Importer</button>
-            <input type="file" id="importFile" class="hidden" accept=".json">
+            <!-- NEW: Clear All Button -->
+            <button id="clearAllBtn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm font-semibold">Slett alt</button>
+            <input type="file" id="importFile" class="hidden" accept=".json,image/jpeg">
         </div>
     </header>
 
@@ -252,12 +254,13 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         // --- DOM Elements ---
-        const canvas = document.getElementById('timelineCanvas'); // FIX: Correct ID
+        const canvas = document.getElementById('timelineCanvas');
         const ctx = canvas.getContext('2d');
         const startDateInput = document.getElementById('startDate');
         const endDateInput = document.getElementById('endDate');
         const setDateRangeBtn = document.getElementById('setDateRange');
         const zoomSensitivitySlider = document.getElementById('zoomSensitivity');
+        const clearAllBtn = document.getElementById('clearAllBtn'); // NEW: Clear All button
         
         // Modals
         const detailsModal = document.getElementById('detailsModal');
@@ -304,6 +307,47 @@
             },
             editingItemId: null,
             editingItemType: null,
+        };
+
+        // --- Local Storage Management ---
+        const LOCAL_STORAGE_KEY = 'timelineData';
+        const saveState = () => {
+            const dataToSave = {
+                timelineStart: state.timelineStart,
+                timelineEnd: state.timelineEnd,
+                events: state.events.map(({lane, y, ...rest}) => rest),
+                periods: state.periods.map(({lane, y, ...rest}) => rest),
+            };
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToSave));
+            console.log('Tidslinje lagret automatisk.');
+        };
+
+        const loadState = () => {
+            const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedData) {
+                try {
+                    const parsedData = JSON.parse(savedData);
+                    state.timelineStart = parsedData.timelineStart;
+                    state.timelineEnd = parsedData.timelineEnd;
+                    state.events = parsedData.events;
+                    state.periods = parsedData.periods;
+                    
+                    // Update UI elements from loaded state
+                    startDateInput.value = state.timelineStart;
+                    endDateInput.value = state.timelineEnd;
+                    
+                    // Pre-load images
+                    [...state.events, ...state.periods].forEach(loadImage);
+                    
+                    console.log('Tidslinje lastet fra lagring.');
+                    return true;
+                } catch (e) {
+                    console.error("Feil ved lasting av lagret data:", e);
+                    localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupt data
+                    return false;
+                }
+            }
+            return false;
         };
 
         // --- Canvas & Drawing Setup ---
@@ -520,8 +564,9 @@
                 const totalYears = state.timelineEnd - state.timelineStart;
                 state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
                 state.view.panX = 0; state.view.panY = 0; requestDraw();
+                saveState(); // Save state on date range change
             } else {
-                alert('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.');
+                showConfirm('Vennligst skriv inn et gyldig start- og sluttår, der start er mindre enn slutt.', () => {});
             }
         });
 
@@ -593,6 +638,7 @@
                 state.dragging.creationRect = null;
                 requestDraw();
             }
+            saveState(); // Save state after any drag/drop or creation action
         });
 
         canvas.addEventListener('mouseleave', () => {
@@ -602,6 +648,7 @@
                 state.dragging.creationRect = null;
                 canvas.classList.remove('grabbing');
                 canvas.style.cursor = 'grab';
+                saveState(); // Save state on mouse leave if dragging
             }
             requestDraw();
         });
@@ -732,11 +779,23 @@
                 else if (type === 'period') { state.periods = state.periods.filter(p => p.id !== id); }
                 closeModal(detailsModal);
                 requestDraw();
+                saveState(); // Save state after deleting an item
+            });
+        });
+
+        // NEW: Clear All button listener
+        clearAllBtn.addEventListener('click', () => {
+            showConfirm('Er du sikker på at du vil slette ALLE hendelser og perioder? Denne handlingen kan ikke angres.', () => {
+                state.events = [];
+                state.periods = [];
+                requestDraw();
+                saveState();
             });
         });
 
         function showConfirm(message, onConfirm) {
             document.getElementById('confirmText').textContent = message;
+            document.getElementById('confirmTitle').textContent = 'Er du sikker?';
             openModal(confirmModal);
             const confirmOk = document.getElementById('confirmOk');
             const confirmCancel = document.getElementById('confirmCancel');
@@ -812,6 +871,7 @@
                 state.events.push(data);
             }
             loadImage(data); requestDraw(); e.target.reset(); closeModal(eventModal);
+            saveState(); // Save state after adding/editing event
         });
 
         document.getElementById('periodForm').addEventListener('submit', (e) => {
@@ -824,7 +884,7 @@
                 description: document.getElementById('periodDesc').value,
                 img: document.getElementById('periodImg').value,
             };
-            if (data.startDate >= data.endDate) { alert('Startdato må være før sluttdato.'); return; }
+            if (data.startDate >= data.endDate) { showConfirm('Startdato må være før sluttdato.', () => {}); return; }
             if (periodId) {
                 const index = state.periods.findIndex(p => p.id == periodId);
                 if (index !== -1) state.periods[index] = { ...state.periods[index], ...data };
@@ -833,17 +893,24 @@
                 state.periods.push(data);
             }
             loadImage(data); requestDraw(); e.target.reset(); closeModal(periodModal);
+            saveState(); // Save state after adding/editing period
         });
 
         // --- Import/Export Logic ---
-        exportBtn.addEventListener('click', () => openModal(exportModal));
-        document.getElementById('exportJsonBtn').addEventListener('click', () => {
-            const dataToExport = {
+        const EXPORT_DATA_MARKER = 'TIMELINE_DATA_JSON=';
+        
+        function getTimelineData() {
+            return {
                 timelineStart: state.timelineStart,
                 timelineEnd: state.timelineEnd,
                 events: state.events.map(({lane, y, ...rest}) => rest),
                 periods: state.periods.map(({lane, y, ...rest}) => rest),
             };
+        }
+
+        exportBtn.addEventListener('click', () => openModal(exportModal));
+        document.getElementById('exportJsonBtn').addEventListener('click', () => {
+            const dataToExport = getTimelineData();
             const dataStr = JSON.stringify(dataToExport, null, 2);
             const blob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -889,6 +956,7 @@
             if (isNaN(start) || isNaN(end) || isNaN(width) || width <= 0 || start >= end) return 400;
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = width;
             const exportZoom = width / (end - start);
             const dateToPxExport = (date) => (date - start) * exportZoom;
             const { eventLanes, periodLanes } = calculateLayout(dateToPxExport, 0, 0, tempCtx);
@@ -902,7 +970,7 @@
                     }
                 });
             }
-            const requiredHeight = (eventLanes * 50) + (periodLanes * 55) + descHeight + 150;
+            const requiredHeight = (eventLanes * 50) + (periodLanes * 55) + (showDescriptions ? descHeight + 50 : 0) + 150;
             return Math.max(400, Math.ceil(requiredHeight));
         }
 
@@ -920,7 +988,7 @@
 
         async function exportJpeg(start, end, width, height, showDescriptions) {
             if (isNaN(start) || isNaN(end) || isNaN(width) || isNaN(height) || width <= 0 || height <= 0 || start >= end) {
-                alert('Vennligst fyll inn gyldige eksportinnstillinger.'); return;
+                showConfirm('Vennligst fyll inn gyldige eksportinnstillinger.', () => {}); return;
             }
             document.getElementById('exportSpinner').style.display = 'block';
             document.getElementById('generateJpegBtn').disabled = true;
@@ -933,13 +1001,21 @@
                     tempCtx.fillStyle = '#f7fafc'; tempCtx.fillRect(0, 0, width, height);
                     const exportZoom = width / (end - start);
                     const dateToPxExport = (date) => (date - start) * exportZoom;
+                    
                     calculateLayout(dateToPxExport, height, 0, tempCtx);
                     drawOnTempCanvas(tempCtx, width, height, dateToPxExport, showDescriptions, start, end);
+                    
+                    // Embed JSON data into the data URL
+                    const dataToExport = getTimelineData();
+                    const dataStr = JSON.stringify(dataToExport);
+                    const base64Data = btoa(unescape(encodeURIComponent(dataStr))); // encode to Base64
                     const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-                    const a = document.createElement('a'); a.href = dataUrl; a.download = 'tidslinje.jpeg';
+                    const finalDataUrl = dataUrl + EXPORT_DATA_MARKER + base64Data;
+                    
+                    const a = document.createElement('a'); a.href = finalDataUrl; a.download = 'tidslinje.jpeg';
                     document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 } catch (err) {
-                    console.error("Export failed:", err); alert("En feil oppstod under eksporten.");
+                    console.error("Export failed:", err); showConfirm("En feil oppstod under eksporten.", () => {});
                 } finally {
                     document.getElementById('exportSpinner').style.display = 'none';
                     document.getElementById('generateJpegBtn').disabled = false;
@@ -977,36 +1053,54 @@
                 tempCtx.fillText(year, x, axisY + tickHeight + 15);
             }
 
+            let yOffset = showDesc ? 50 : 0;
+            
             state.events.forEach(event => {
                 const x = dateToPxFn(event.date);
-                tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, event.y); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
-                tempCtx.beginPath(); tempCtx.arc(x, event.y, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
-                tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, event.y - 15);
+                const eventY = event.y - (canvas.height/window.devicePixelRatio / 2) - state.view.panY + axisY - yOffset;
+                
+                tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = '#38A169'; tempCtx.lineWidth = 2; tempCtx.stroke();
+                tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = '#38A169'; tempCtx.fill();
+                tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, eventY - 15);
+                
                 if (showDesc && event.description) {
-                    tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568';
+                    tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
                     const lines = wrapText(tempCtx, event.description, 200);
-                    lines.forEach((line, i) => tempCtx.fillText(line, x, event.y + 15 + (i * 14)));
+                    lines.forEach((line, i) => tempCtx.fillText(line, x, eventY + 15 + (i * 14)));
+                    if (event.img && state.images[event.img]) {
+                        const img = state.images[event.img];
+                        const imgSize = 40;
+                        tempCtx.drawImage(img, x - imgSize/2, eventY + 15 + (lines.length * 14) + 5, imgSize, imgSize * img.height / img.width);
+                    }
                 }
             });
 
             state.periods.forEach(period => {
                 const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
+                const periodY = period.y - (canvas.height/window.devicePixelRatio / 2) - state.view.panY + axisY + yOffset;
+                
                 tempCtx.fillStyle = 'rgba(66, 153, 225, 0.7)'; tempCtx.strokeStyle = '#2B6CB0'; tempCtx.lineWidth = 2;
-                tempCtx.beginPath(); tempCtx.roundRect(startX, period.y, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
+                tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, 40, 8); tempCtx.fill(); tempCtx.stroke();
+                
                 tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center';
                 const textFits = tempCtx.measureText(period.title).width < pWidth - 10;
                 if (textFits) {
                     tempCtx.fillStyle = 'white'; tempCtx.textBaseline = 'middle';
-                    tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, period.y, pWidth, 40); tempCtx.clip();
-                    tempCtx.fillText(period.title, startX + pWidth / 2, period.y + 20); tempCtx.restore();
+                    tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, periodY, pWidth, 40); tempCtx.clip();
+                    tempCtx.fillText(period.title, startX + pWidth / 2, periodY + 20); tempCtx.restore();
                 } else {
                     tempCtx.fillStyle = '#2B6CB0'; tempCtx.textBaseline = 'alphabetic';
-                    tempCtx.fillText(period.title, startX + pWidth / 2, period.y - 10);
+                    tempCtx.fillText(period.title, startX + pWidth / 2, periodY - 10);
                 }
                 if (showDesc && period.description) {
                     tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
                     const lines = wrapText(tempCtx, period.description, 200);
-                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, period.y + 40 + 15 + (i * 14)));
+                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, periodY + 40 + 15 + (i * 14)));
+                    if (period.img && state.images[period.img]) {
+                        const img = state.images[period.img];
+                        const imgSize = 40;
+                        tempCtx.drawImage(img, startX + pWidth/2 - imgSize/2, periodY + 40 + 15 + (lines.length * 14) + 5, imgSize, imgSize * img.height / img.width);
+                    }
                 }
             });
         }
@@ -1027,7 +1121,21 @@
             const reader = new FileReader();
             reader.onload = (event) => {
                 try {
-                    const importedData = JSON.parse(event.target.result);
+                    let importedData;
+                    if (file.type === 'image/jpeg' || file.name.toLowerCase().endsWith('.jpeg') || file.name.toLowerCase().endsWith('.jpg')) {
+                        const dataUrl = event.target.result;
+                        const markerIndex = dataUrl.lastIndexOf(EXPORT_DATA_MARKER);
+                        if (markerIndex !== -1) {
+                            const base64Data = dataUrl.substring(markerIndex + EXPORT_DATA_MARKER.length);
+                            const jsonStr = decodeURIComponent(escape(atob(base64Data)));
+                            importedData = JSON.parse(jsonStr);
+                        } else {
+                            throw new Error('Ingen tidslinjedata funnet i bildet.');
+                        }
+                    } else {
+                        importedData = JSON.parse(event.target.result);
+                    }
+                    
                     if (importedData.timelineStart && importedData.timelineEnd && importedData.events && importedData.periods) {
                         state.timelineStart = importedData.timelineStart;
                         state.timelineEnd = importedData.timelineEnd;
@@ -1040,20 +1148,27 @@
                         const totalYears = state.timelineEnd - state.timelineStart;
                         state.view.zoom = (canvas.width / window.devicePixelRatio) / totalYears;
                         state.view.panX = 0; state.view.panY = 0; requestDraw();
+                        saveState(); // Save imported state
                     } else { throw new Error('Invalid timeline file format.'); }
                 } catch (err) {
-                    alert('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format.');
+                    showConfirm('Feil: Kunne ikke importere filen. Den kan være ødelagt eller i feil format. Detaljer: ' + err.message, () => {});
                     console.error(err);
                 }
             };
-            reader.readAsText(file);
+            if (file.type === 'image/jpeg' || file.name.toLowerCase().endsWith('.jpeg') || file.name.toLowerCase().endsWith('.jpg')) {
+                 reader.readAsDataURL(file);
+            } else {
+                 reader.readAsText(file);
+            }
             importFileInput.value = '';
         });
 
         // --- Initial Setup ---
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-        setDateRangeBtn.click();
+        if (!loadState()) {
+            setDateRangeBtn.click();
+        }
     });
     </script>
 </body>
