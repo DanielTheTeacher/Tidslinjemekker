@@ -561,11 +561,7 @@
                     }
                 }
                 
-                context.font = 'bold 14px Inter';
-                const titleWidth = context.measureText(period.title).width;
-                const isTitleOutOfBounds = titleWidth > (endX - startX) - 20;
-                
-                period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
+                period.y = highestY;
 
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 const yearRangeHeight = 10;
@@ -589,18 +585,29 @@
                 period.height = titleHeight + yearRangeHeight + descriptionHeight + imageHeight + (paddingY * 2);
                 const newBottomY = period.y + period.height;
 
-                const newSkyline = [];
-                let added = false;
+                const newSegments = [];
                 for (const segment of skylineDown) {
-                    if (segment.endX <= startX) newSkyline.push(segment);
-                    else {
-                        if (!added) { newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY }); added = true; }
-                        if (segment.endX > endX) newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
+                    const segStart = segment.startX;
+                    const segEnd = segment.endX;
+                    const segBottom = segment.bottomY;
+
+                    if (segEnd <= startX || segStart >= endX) {
+                        newSegments.push(segment);
+                        continue;
+                    }
+
+                    if (segStart < startX) {
+                        newSegments.push({ startX: segStart, endX: startX, bottomY: segBottom });
+                    }
+                    if (segEnd > endX) {
+                        newSegments.push({ startX: endX, endX: segEnd, bottomY: segBottom });
                     }
                 }
-                if (!added) newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
+
+                newSegments.push({ startX: startX, endX: endX, bottomY: newBottomY });
+
                 skylineDown.length = 0;
-                Array.prototype.push.apply(skylineDown, newSkyline.sort((a, b) => a.startX - b.startX));
+                Array.prototype.push.apply(skylineDown, newSegments.sort((a, b) => a.startX - b.startX));
             });
         }
 
@@ -894,7 +901,7 @@
                 const isTitleOutOfBounds = titleWidth > width - 20;
 
                 const titleX = startX + width / 2;
-                let titleY = isTitleOutOfBounds ? period.y - 10 : period.y + 15;
+                let titleY = period.y + 15;
                 
                 const yearRangeText = `(${formatYear(period.startDate)} - ${formatYear(period.endDate)})`;
                 context.font = '9px Inter'; // Set font for width measurement
@@ -909,12 +916,19 @@
                 
                 context.font = 'bold 14px Inter'; // Reset font for title
                 if (isTitleOutOfBounds) {
+                    context.save();
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
                     context.strokeStyle = 'white';
                     context.lineWidth = 3;
                     context.strokeText(period.title, titleX, titleY);
+                    context.fillStyle = '#1A202C'; 
+                    context.fillText(period.title, titleX, titleY);
+                    context.restore();
+                } else {
+                    context.fillStyle = '#1A202C'; 
+                    context.fillText(period.title, titleX, titleY);
                 }
-                context.fillStyle = '#1A202C'; 
-                context.fillText(period.title, titleX, titleY);
                 
                 if (!isTitleOutOfBounds && !(yearRangeWidth > width - 20)) {
                     context.font = '9px Inter';
@@ -1589,11 +1603,7 @@
                      }
                 }
                 
-                tempCtx.font = 'bold 14px Inter';
-                const titleWidth = tempCtx.measureText(period.title).width;
-                const isTitleOutOfBounds = titleWidth > (endX - startX) - 20;
-                
-                period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
+                period.y = highestY;
                 
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 const yearRangeHeight = 10;
@@ -1612,17 +1622,28 @@
                 const newBottomY = period.y + period.height;
                 maxPeriodY = Math.max(maxPeriodY, newBottomY);
                 
-                const newSkyline = []; let added = false;
+                const newSegments = [];
                 for (const segment of skylineDown) {
-                    if (segment.endX <= startX) newSkyline.push(segment);
-                    else {
-                        if (!added) { newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY }); added = true; }
-                        if (segment.endX > endX) newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
+                    const segStart = segment.startX;
+                    const segEnd = segment.endX;
+                    const segBottom = segment.bottomY;
+
+                    if (segEnd <= startX || segStart >= endX) {
+                        newSegments.push(segment);
+                        continue;
+                    }
+
+                    if (segStart < startX) {
+                        newSegments.push({ startX: segStart, endX: startX, bottomY: segBottom });
+                    }
+                    if (segEnd > endX) {
+                        newSegments.push({ startX: endX, endX: segEnd, bottomY: segBottom });
                     }
                 }
-                if (!added) newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
+                newSegments.push({ startX: startX, endX: endX, bottomY: newBottomY });
                 skylineDown.length = 0;
-                Array.prototype.push.apply(skylineDown, newSkyline.sort((a, b) => a.startX - b.startX));
+                Array.prototype.push.apply(skylineDown, newSegments.sort((a, b) => a.startX - b.startX));
+
                 layout.periods.push(period);
             });
 
