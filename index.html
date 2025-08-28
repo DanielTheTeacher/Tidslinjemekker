@@ -204,7 +204,8 @@
                 </div>
                 <div class="mb-4">
                     <label for="periodDesc" class="block text-sm font-medium text-gray-700">Beskrivelse</label>
-                    <textarea id="periodDesc" rows="3" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    <textarea id="periodDesc" rows="3" maxlength="250" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                    <div id="periodCharCount" class="text-right text-sm text-gray-500 mt-1">0 / 250</div>
                 </div>
                  <div class="flex gap-4">
                     <div class="mb-4 flex-grow">
@@ -452,40 +453,39 @@
             });
 
             // --- Skyline-based Period Layout ---
-            const periodBaseHeight = 40;
             const periodVSpacing = 15;
-            const periodDescLineHeight = 14;
-            const periodDescTopMargin = 15;
             const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
-            
             const skyline = []; // Stores { endX, bottomY }
 
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
                 const endX = coordFn(period.endDate);
                 
-                // Find the highest point on the skyline this period overlaps with
                 let highestY = (viewHeight / 2) + panY + 30;
                 for (const segment of skyline) {
-                    if (startX < segment.endX) {
-                        highestY = Math.max(highestY, segment.bottomY);
+                    // Check for horizontal overlap
+                    if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
+                         highestY = Math.max(highestY, segment.bottomY);
                     }
                 }
                 period.y = highestY;
 
                 // Calculate period's own height
+                const titleHeight = 20;
+                const paddingY = 10;
                 let descriptionHeight = 0;
+                
                 if (state.view.showDescriptions && period.description) {
                     const width = endX - startX;
-                    const wrapWidth = Math.max(1, width - 20);
+                    const wrapWidth = Math.max(1, width - (paddingY * 2));
                     context.font = '12px Inter';
                     const lines = wrapText(context, period.description, wrapWidth);
                     period.descriptionLines = lines;
-                    descriptionHeight = lines.length * periodDescLineHeight;
+                    descriptionHeight = lines.length * 14;
                 } else {
                     period.descriptionLines = [];
                 }
-                period.height = periodBaseHeight + (descriptionHeight > 0 ? periodDescTopMargin + descriptionHeight : 0);
+                period.height = titleHeight + descriptionHeight + (paddingY * 2);
                 const newBottomY = period.y + period.height + periodVSpacing;
 
                 // Update the skyline
@@ -496,19 +496,19 @@
                         newSkyline.push(segment);
                     } else {
                         if (!added) {
-                            newSkyline.push({ endX: endX, bottomY: newBottomY });
+                            newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
                             added = true;
                         }
                         if (segment.endX > endX) {
-                            newSkyline.push(segment);
+                           newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
                         }
                     }
                 }
                 if (!added) {
-                    newSkyline.push({ endX: endX, bottomY: newBottomY });
+                    newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
                 }
                 skyline.length = 0;
-                Array.prototype.push.apply(skyline, newSkyline.sort((a, b) => a.endX - b.endX));
+                Array.prototype.push.apply(skyline, newSkyline.sort((a, b) => a.startX - b.startX));
             });
         }
 
@@ -615,7 +615,6 @@
         }
         
         function drawPeriods(axisY) {
-            const periodHeight = 40;
             const radius = 8;
             state.periods.forEach(period => {
                 const color = period.color || '#4299E1';
@@ -640,7 +639,7 @@
                 } else {
                     ctx.fillStyle = hexToRgba(color, 0.7); 
                 }
-                ctx.beginPath(); ctx.roundRect(startX, period.y, width, periodHeight, radius); ctx.fill();
+                ctx.beginPath(); ctx.roundRect(startX, period.y, width, period.height, radius); ctx.fill();
                 
                 // Draw stroke
                 ctx.strokeStyle = darkenColor(color, 20); 
@@ -650,41 +649,46 @@
                     ctx.beginPath();
                     ctx.moveTo(startX + radius, period.y);
                     ctx.lineTo(endX - radius, period.y);
-                    ctx.moveTo(startX + radius, period.y + periodHeight);
-                    ctx.lineTo(endX - radius, period.y + periodHeight);
+                    ctx.moveTo(startX + radius, period.y + period.height);
+                    ctx.lineTo(endX - radius, period.y + period.height);
                     ctx.stroke();
                 } else {
-                    ctx.beginPath(); ctx.roundRect(startX, period.y, width, periodHeight, radius); ctx.stroke();
+                    ctx.beginPath(); ctx.roundRect(startX, period.y, width, period.height, radius); ctx.stroke();
                 }
 
+                // Clip to the rounded rectangle for drawing text inside
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(startX, period.y, width, period.height, radius);
+                ctx.clip();
 
-                // Draw text
-                ctx.fillStyle = '#1A202C'; 
+                // --- Draw Title ---
+                const textFits = ctx.measureText(period.title).width < width - 20;
                 ctx.font = 'bold 14px Inter'; 
                 ctx.textAlign = 'center'; 
                 ctx.textBaseline = 'middle';
-                
-                const textFits = ctx.measureText(period.title).width < width - 10;
-                if (state.view.zoom > 0.5 && textFits) {
-                    ctx.save(); ctx.beginPath(); ctx.rect(startX, period.y, width, periodHeight); ctx.clip();
-                    ctx.fillText(period.title, startX + width / 2, period.y + periodHeight / 2); ctx.restore();
-                } else {
-                    ctx.fillStyle = darkenColor(color, 20);
-                    ctx.fillText(period.title, startX + width / 2, period.y - 10);
-                }
+                const titleY = period.y + 15;
 
+                if (!textFits) {
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 3;
+                    ctx.strokeText(period.title, startX + width / 2, titleY);
+                }
+                ctx.fillStyle = '#1A202C'; 
+                ctx.fillText(period.title, startX + width / 2, titleY);
+                
+                // --- Draw Description ---
                 if (state.view.showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
                     ctx.font = '12px Inter';
-                    ctx.fillStyle = '#4A5568';
+                    ctx.fillStyle = '#2D3748';
                     ctx.textAlign = 'center';
-                    ctx.textBaseline = 'alphabetic';
-                    const periodDescLineHeight = 14;
-                    const periodDescTopMargin = 15;
+                    ctx.textBaseline = 'top';
                     const lines = period.descriptionLines;
                     lines.forEach((line, i) => {
-                        ctx.fillText(line, startX + width / 2, period.y + periodHeight + periodDescTopMargin + (i * periodDescLineHeight));
+                        ctx.fillText(line, startX + width / 2, period.y + 30 + (i * 14));
                     });
                 }
+                ctx.restore();
             });
         }
         
@@ -890,12 +894,11 @@
         }
 
         function getPeriodAt(x, y) {
-            const periodHeight = 40;
             for (let i = state.periods.length - 1; i >= 0; i--) {
                 const period = state.periods[i];
                 const startX = dateToPx(period.startDate);
                 const endX = dateToPx(period.endDate);
-                if (x >= startX && x <= endX && y >= period.y && y <= period.y + periodHeight) {
+                if (x >= startX && x <= endX && y >= period.y && y <= period.y + period.height) {
                     return { item: period, index: i, type: 'period' };
                 }
             }
@@ -1018,6 +1021,14 @@
             document.getElementById('periodForm').reset();
             const colorPicker = document.getElementById('periodColor');
             const isApproximateCheckbox = document.getElementById('periodIsApproximate');
+            const charCount = document.getElementById('periodCharCount');
+            const descTextarea = document.getElementById('periodDesc');
+            
+            const updateCharCount = () => {
+                charCount.textContent = `${descTextarea.value.length} / 250`;
+            };
+            descTextarea.addEventListener('input', updateCharCount);
+
             if (period) { // Editing
                 document.getElementById('periodModalTitle').textContent = 'Rediger periode';
                 document.getElementById('savePeriodBtn').textContent = 'Lagre endringer';
@@ -1025,7 +1036,7 @@
                 document.getElementById('periodStartDate').value = period.startDate;
                 document.getElementById('periodEndDate').value = period.endDate;
                 document.getElementById('periodTitle').value = period.title;
-                document.getElementById('periodDesc').value = period.description;
+                descTextarea.value = period.description || '';
                 document.getElementById('periodImg').value = period.img;
                 colorPicker.value = period.color || '#4299E1';
                 isApproximateCheckbox.checked = period.isApproximate || false;
@@ -1033,6 +1044,7 @@
                 document.getElementById('periodModalTitle').textContent = 'Legg til ny periode';
                 document.getElementById('savePeriodBtn').textContent = 'Legg til periode';
                 document.getElementById('periodId').value = '';
+                descTextarea.value = '';
                 colorPicker.value = '#4299E1';
                 isApproximateCheckbox.checked = false;
                 if (dates) {
@@ -1040,6 +1052,7 @@
                     document.getElementById('periodEndDate').value = parseFloat(dates.endDate.toFixed(2));
                 }
             }
+            updateCharCount();
             openModal(periodModal);
         }
 
@@ -1181,10 +1194,7 @@
             axisY = topPadding + eventsHeight + 15;
 
             // --- Period Layout (Skyline) ---
-            const periodBaseHeight = 40;
             const periodVSpacing = 15;
-            const periodDescLineHeight = 14;
-            const periodDescTopMargin = 15;
             const sortedPeriods = JSON.parse(JSON.stringify(state.periods)).sort((a, b) => a.startDate - b.startDate);
             const skyline = [];
             let maxPeriodY = axisY + 30;
@@ -1195,22 +1205,24 @@
                 
                 let highestY = axisY + 30;
                 for (const segment of skyline) {
-                    if (startX < segment.endX) {
-                        highestY = Math.max(highestY, segment.bottomY);
+                     if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
+                         highestY = Math.max(highestY, segment.bottomY);
                     }
                 }
                 period.y = highestY;
-
+                
+                const titleHeight = 20;
+                const paddingY = 10;
                 let descriptionHeight = 0;
                 if (showDescriptions && period.description) {
                     const pWidth = endX - startX;
-                    const wrapWidth = Math.max(1, pWidth - 20);
+                    const wrapWidth = Math.max(1, pWidth - (paddingY * 2));
                     tempCtx.font = '12px Inter';
                     const lines = wrapText(tempCtx, period.description, wrapWidth);
                     period.descriptionLines = lines;
-                    descriptionHeight = lines.length * periodDescLineHeight;
+                    descriptionHeight = lines.length * 14;
                 }
-                const periodTotalHeight = periodBaseHeight + (descriptionHeight > 0 ? periodDescTopMargin + descriptionHeight : 0);
+                const periodTotalHeight = titleHeight + descriptionHeight + (paddingY * 2);
                 const newBottomY = period.y + periodTotalHeight + periodVSpacing;
                 maxPeriodY = Math.max(maxPeriodY, newBottomY);
                 
@@ -1221,19 +1233,19 @@
                         newSkyline.push(segment);
                     } else {
                         if (!added) {
-                            newSkyline.push({ endX: endX, bottomY: newBottomY });
+                            newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
                             added = true;
                         }
                         if (segment.endX > endX) {
-                            newSkyline.push(segment);
+                           newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
                         }
                     }
                 }
                 if (!added) {
-                    newSkyline.push({ endX: endX, bottomY: newBottomY });
+                    newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
                 }
                 skyline.length = 0;
-                Array.prototype.push.apply(skyline, newSkyline.sort((a, b) => a.endX - b.endX));
+                Array.prototype.push.apply(skyline, newSkyline.sort((a, b) => a.startX - b.startX));
                 layout.periods.push(period);
             });
 
@@ -1353,8 +1365,14 @@
                 const color = period.color || '#4299E1';
                 const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
                 const periodY = period.y;
-                const periodHeight = 40;
-                
+                const titleHeight = 20;
+                const paddingY = 10;
+                let descriptionHeight = 0;
+                if (period.descriptionLines) {
+                    descriptionHeight = period.descriptionLines.length * 14;
+                }
+                const periodTotalHeight = titleHeight + descriptionHeight + (paddingY * 2);
+
                 if (period.isApproximate && pWidth > 0) {
                     const gradient = tempCtx.createLinearGradient(startX, 0, endX, 0);
                     const fadeWidth = Math.min(pWidth / 2, 20);
@@ -1370,7 +1388,7 @@
                 } else {
                     tempCtx.fillStyle = hexToRgba(color, 0.7);
                 }
-                tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodHeight, radius); tempCtx.fill();
+                tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodTotalHeight, radius); tempCtx.fill();
 
                 tempCtx.strokeStyle = darkenColor(color, 20); 
                 tempCtx.lineWidth = 2;
@@ -1378,32 +1396,41 @@
                     tempCtx.beginPath();
                     tempCtx.moveTo(startX + radius, periodY);
                     tempCtx.lineTo(endX - radius, periodY);
-                    tempCtx.moveTo(startX + radius, periodY + periodHeight);
-                    tempCtx.lineTo(endX - radius, periodY + periodHeight);
+                    tempCtx.moveTo(startX + radius, periodY + periodTotalHeight);
+                    tempCtx.lineTo(endX - radius, periodY + periodTotalHeight);
                     tempCtx.stroke();
                 } else {
-                    tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodHeight, radius); tempCtx.stroke();
+                    tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodTotalHeight, radius); tempCtx.stroke();
                 }
                 
-                tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center';
-                const textFits = tempCtx.measureText(period.title).width < pWidth - 10;
-                if (textFits) {
-                    tempCtx.fillStyle = '#1A202C';
-                    tempCtx.textBaseline = 'middle';
-                    tempCtx.save(); tempCtx.beginPath(); tempCtx.rect(startX, periodY, pWidth, periodHeight); tempCtx.clip();
-                    tempCtx.fillText(period.title, startX + pWidth / 2, periodY + periodHeight / 2); tempCtx.restore();
-                } else {
-                    tempCtx.fillStyle = darkenColor(color, 20); 
-                    tempCtx.textBaseline = 'alphabetic';
-                    tempCtx.fillText(period.title, startX + pWidth / 2, periodY - 10);
+                tempCtx.save();
+                tempCtx.beginPath();
+                tempCtx.roundRect(startX, periodY, pWidth, periodTotalHeight, radius);
+                tempCtx.clip();
+                
+                const textFits = tempCtx.measureText(period.title).width < pWidth - 20;
+                tempCtx.font = 'bold 14px Inter';
+                tempCtx.textAlign = 'center';
+                tempCtx.textBaseline = 'middle';
+                const titleY2 = period.y + 15;
+
+                if (!textFits) {
+                    tempCtx.strokeStyle = 'white';
+                    tempCtx.lineWidth = 3;
+                    tempCtx.strokeText(period.title, startX + pWidth / 2, titleY2);
                 }
+                tempCtx.fillStyle = '#1A202C';
+                tempCtx.fillText(period.title, startX + pWidth / 2, titleY2);
+
                 if (period.descriptionLines && period.descriptionLines.length > 0) {
-                    tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
+                    tempCtx.font = '12px Inter';
+                    tempCtx.fillStyle = '#2D3748';
+                    tempCtx.textAlign = 'center';
+                    tempCtx.textBaseline = 'top';
                     const lines = period.descriptionLines;
-                    const periodDescLineHeight = 14;
-                    const periodDescTopMargin = 15;
-                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, periodY + periodHeight + periodDescTopMargin + (i * periodDescLineHeight)));
+                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, period.y + 30 + (i * 14)));
                 }
+                tempCtx.restore();
             });
         }
 
