@@ -424,6 +424,20 @@
                 });
             }
         }
+
+        function getDynamicFontSize(lineCount) {
+            const baseSize = 12;
+            const minSize = 6;
+            const maxLines = 10;
+            const scaleThreshold = 20; // At this many lines, font is at its minimum size
+
+            if (lineCount <= maxLines) {
+                return baseSize;
+            }
+            
+            const scale = Math.max(0, (scaleThreshold - lineCount) / (scaleThreshold - maxLines));
+            return minSize + (baseSize - minSize) * scale;
+        }
         
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
             const vSpacing = 15;
@@ -453,10 +467,11 @@
                     let imgHeight = 0;
 
                     if (event.description) {
-                        context.font = '12px Inter';
                         const lines = wrapText(context, event.description, boxWidth - padding * 2);
                         event.descriptionLines = lines;
-                        descHeight = lines.length * 14;
+                        const fontSize = getDynamicFontSize(lines.length);
+                        const lineHeight = fontSize * 1.2;
+                        descHeight = lines.length * lineHeight;
                     } else {
                         event.descriptionLines = [];
                     }
@@ -517,10 +532,11 @@
                 if (state.view.showDescriptions && period.description) {
                     const width = endX - startX;
                     const wrapWidth = Math.max(1, width - (paddingY * 2));
-                    context.font = '12px Inter';
                     const lines = wrapText(context, period.description, wrapWidth);
                     period.descriptionLines = lines;
-                    descriptionHeight = lines.length * 14;
+                    const fontSize = getDynamicFontSize(lines.length);
+                    const lineHeight = fontSize * 1.2;
+                    descriptionHeight = lines.length * lineHeight;
                 } else {
                     period.descriptionLines = [];
                 }
@@ -554,7 +570,7 @@
 
 
         function draw() {
-            const dpr = window.devicePixelRatio;
+            const dpr = window.devicePixelRatio || 1;
             const { width, height } = canvas;
             ctx.clearRect(0, 0, width / dpr, height / dpr);
 
@@ -567,8 +583,8 @@
             ctx.stroke();
 
             drawMarkers(axisY);
-            drawPeriods(axisY);
-            drawEvents(axisY);
+            drawPeriods(ctx, dateToPx, state.periods, state.images, state.view.showDescriptions);
+            drawEvents(ctx, dateToPx, state.events, state.images, axisY, state.view.showDescriptions);
             drawCreationRect();
             drawHoverIndicator();
         }
@@ -634,78 +650,71 @@
             }
         }
 
-        function drawEvents(axisY) {
+        function drawEvents(context, coordFn, events, images, axisY, showDescriptions) {
             const radius = 8;
-            state.events.forEach(event => {
+            events.forEach(event => {
                 const color = event.color || '#38A169';
-                const x = dateToPx(event.date);
+                const x = coordFn(event.date);
                 
-                // Draw content box if it exists
-                if (state.view.showDescriptions && event.height > 0) {
+                if (showDescriptions && event.height > 0) {
                     const boxWidth = 180;
                     const boxX = x - boxWidth / 2;
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.roundRect(boxX, event.y, boxWidth, event.height, radius);
-                    ctx.fill();
-                    ctx.stroke();
+                    context.fillStyle = '#FFFFFF';
+                    context.strokeStyle = color;
+                    context.lineWidth = 1;
+                    context.beginPath();
+                    context.roundRect(boxX, event.y, boxWidth, event.height, radius);
+                    context.fill();
+                    context.stroke();
 
-                    // Clip for content
-                    ctx.save();
-                    ctx.clip();
+                    context.save();
+                    context.clip();
 
-                    // Title
-                    ctx.fillStyle = '#2D3748';
-                    ctx.font = 'bold 14px Inter';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(event.title, x, event.y + 15);
+                    context.fillStyle = '#2D3748';
+                    context.font = 'bold 14px Inter';
+                    context.textAlign = 'center';
+                    context.fillText(event.title, x, event.y + 15);
 
-                    // Description
                     let currentY = event.y + 30;
                     if (event.descriptionLines && event.descriptionLines.length > 0) {
-                        ctx.font = '12px Inter';
-                        ctx.fillStyle = '#4A5568';
-                        ctx.textAlign = 'center';
+                        const fontSize = getDynamicFontSize(event.descriptionLines.length);
+                        const lineHeight = fontSize * 1.2;
+                        context.font = `${fontSize}px Inter`;
+                        context.fillStyle = '#4A5568';
                         event.descriptionLines.forEach(line => {
-                            ctx.fillText(line, x, currentY);
-                            currentY += 14;
+                            context.fillText(line, x, currentY);
+                            currentY += lineHeight;
                         });
                     }
 
-                    // Image
-                    if (event.img && state.images[event.img]) {
-                        const img = state.images[event.img];
+                    if (event.img && images[event.img]) {
+                        const img = images[event.img];
                         const thumbHeight = 50;
                         const thumbWidth = thumbHeight * (img.width / img.height);
                         const imgX = x - thumbWidth / 2;
                         const imgY = currentY + (event.description ? 5 : 0);
-                        ctx.drawImage(img, imgX, imgY, thumbWidth, thumbHeight);
+                        context.drawImage(img, imgX, imgY, thumbWidth, thumbHeight);
                     }
-                    ctx.restore();
-                    // Connector line
-                    ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y + event.height); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+                    context.restore();
+                    context.beginPath(); context.moveTo(x, axisY); context.lineTo(x, event.y + event.height); context.strokeStyle = color; context.lineWidth = 2; context.stroke();
                 } else {
-                    // Default event marker
-                    ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, event.y); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-                    ctx.beginPath(); ctx.arc(x, event.y, 6, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
-                    ctx.fillStyle = '#2D3748'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center'; ctx.fillText(event.title, x, event.y - 15);
+                    context.beginPath(); context.moveTo(x, axisY); context.lineTo(x, event.y); context.strokeStyle = color; context.lineWidth = 2; context.stroke();
+                    context.beginPath(); context.arc(x, event.y, 6, 0, Math.PI * 2); context.fillStyle = color; context.fill();
+                    context.fillStyle = '#2D3748'; context.font = 'bold 14px Inter'; context.textAlign = 'center'; context.fillText(event.title, x, event.y - 15);
                 }
             });
         }
         
-        function drawPeriods(axisY) {
+        function drawPeriods(context, coordFn, periods, images, showDescriptions) {
             const radius = 8;
-            state.periods.forEach(period => {
+            periods.forEach(period => {
                 const color = period.color || '#4299E1';
-                const startX = dateToPx(period.startDate);
-                const endX = dateToPx(period.endDate);
+                const startX = coordFn(period.startDate);
+                const endX = coordFn(period.endDate);
                 const width = endX - startX;
 
-                // Draw fill
                 if (period.isApproximate && width > 0) {
-                    const gradient = ctx.createLinearGradient(startX, 0, endX, 0);
+                    const gradient = context.createLinearGradient(startX, 0, endX, 0);
                     const fadeWidth = Math.min(width / 2, 20);
                     const fadeStart = fadeWidth / width;
                     const fadeEnd = 1 - fadeStart;
@@ -716,75 +725,67 @@
                     gradient.addColorStop(fadeStart, baseColor);
                     gradient.addColorStop(fadeEnd, baseColor);
                     gradient.addColorStop(1, transparentColor);
-                    ctx.fillStyle = gradient;
+                    context.fillStyle = gradient;
                 } else {
-                    ctx.fillStyle = hexToRgba(color, 0.7); 
+                    context.fillStyle = hexToRgba(color, 0.7); 
                 }
-                ctx.beginPath(); ctx.roundRect(startX, period.y, width, period.height, radius); ctx.fill();
+                context.beginPath(); context.roundRect(startX, period.y, width, period.height, radius); context.fill();
                 
-                // Draw stroke
-                ctx.strokeStyle = darkenColor(color, 20); 
-                ctx.lineWidth = 2;
+                context.strokeStyle = darkenColor(color, 20); 
+                context.lineWidth = 2;
                 if (period.isApproximate) {
-                    ctx.beginPath();
-                    ctx.moveTo(startX + radius, period.y);
-                    ctx.lineTo(endX - radius, period.y);
-                    ctx.moveTo(startX + radius, period.y + period.height);
-                    ctx.lineTo(endX - radius, period.y + period.height);
-                    ctx.stroke();
+                    context.beginPath();
+                    context.moveTo(startX + radius, period.y);
+                    context.lineTo(endX - radius, period.y);
+                    context.moveTo(startX + radius, period.y + period.height);
+                    context.lineTo(endX - radius, period.y + period.height);
+                    context.stroke();
                 } else {
-                    ctx.beginPath(); ctx.roundRect(startX, period.y, width, period.height, radius); ctx.stroke();
+                    context.beginPath(); context.roundRect(startX, period.y, width, period.height, radius); context.stroke();
                 }
 
-                // --- Draw Content ---
-                ctx.font = 'bold 14px Inter';
-                const titleWidth = ctx.measureText(period.title).width;
+                context.font = 'bold 14px Inter';
+                const titleWidth = context.measureText(period.title).width;
                 const isTitleOutOfBounds = titleWidth > width - 20;
 
-                // --- Draw Title ---
-                ctx.textAlign = 'center'; 
-                ctx.textBaseline = 'middle';
                 const titleX = startX + width / 2;
                 const titleY = isTitleOutOfBounds ? period.y - 10 : period.y + 15;
 
                 if (isTitleOutOfBounds) {
-                    ctx.strokeStyle = 'white';
-                    ctx.lineWidth = 3;
-                    ctx.strokeText(period.title, titleX, titleY);
+                    context.strokeStyle = 'white';
+                    context.lineWidth = 3;
+                    context.strokeText(period.title, titleX, titleY);
                 }
-                ctx.fillStyle = '#1A202C'; 
-                ctx.fillText(period.title, titleX, titleY);
+                context.fillStyle = '#1A202C'; 
+                context.fillText(period.title, titleX, titleY);
                 
-                // Clip for description and image
-                ctx.save();
-                ctx.beginPath();
-                ctx.roundRect(startX, period.y, width, period.height, radius);
-                ctx.clip();
+                context.save();
+                context.beginPath();
+                context.roundRect(startX, period.y, width, period.height, radius);
+                context.clip();
 
-                // --- Draw Description ---
                 let currentY = period.y + 30;
-                if (state.view.showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
-                    ctx.font = '12px Inter';
-                    ctx.fillStyle = '#2D3748';
-                    ctx.textBaseline = 'top';
-                    const lines = period.descriptionLines;
-                    lines.forEach((line, i) => {
-                        ctx.fillText(line, startX + width / 2, currentY);
-                        currentY += 14;
+                if (showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
+                    const fontSize = getDynamicFontSize(period.descriptionLines.length);
+                    const lineHeight = fontSize * 1.2;
+                    context.font = `${fontSize}px Inter`;
+                    context.fillStyle = '#2D3748';
+                    context.textBaseline = 'top';
+                    period.descriptionLines.forEach((line, i) => {
+                        context.fillText(line, startX + width / 2, currentY);
+                        currentY += lineHeight;
                     });
                 }
 
-                // --- Draw Image ---
-                if (state.view.showDescriptions && period.img && state.images[period.img]) {
-                    const img = state.images[period.img];
+                if (showDescriptions && period.img && images[period.img]) {
+                    const img = images[period.img];
                     const thumbHeight = 50;
                     const thumbWidth = thumbHeight * (img.width / img.height);
                     const imgX = startX + (width - thumbWidth) / 2;
                     const imgY = currentY + (period.description ? 5 : 0);
-                    ctx.drawImage(img, imgX, imgY, thumbWidth, thumbHeight);
+                    context.drawImage(img, imgX, imgY, thumbWidth, thumbHeight);
                 }
-
-                ctx.restore();
+                context.restore();
             });
         }
         
@@ -1264,6 +1265,9 @@
             openModal(exportJpegSettingsModal);
         });
 
+        // =====================================================================
+        // === THIS IS THE CORRECTED FUNCTION FOR EXPORT LAYOUT ===
+        // =====================================================================
         function getExportLayout(start, end, width, showDescriptions) {
             const tempCanvas = document.createElement('canvas');
             const tempCtx = tempCanvas.getContext('2d');
@@ -1271,94 +1275,121 @@
             const dateToPxExport = (date) => (date - start) * (width / (end - start));
 
             const layout = { events: [], periods: [] };
-            let axisY = 0;
-            const topPadding = 30;
-            const labelPadding = 20;
+            const topPadding = 30; // Space at the very top of the image
+            const vSpacing = 15;
 
-            // --- Event Layout ---
-            tempCtx.font = 'bold 14px Inter';
-            const eventLaneHeight = showDescriptions ? 100 : 50;
+            // --- 1. Calculate relative event layout (positions are relative to a baseline of 0) ---
+            const skylineUp = [];
             const sortedEvents = JSON.parse(JSON.stringify(state.events)).sort((a, b) => a.date - b.date);
-            const eventLanes = [];
-            let eventLaneCount = 0;
+            
             sortedEvents.forEach(event => {
                 const eventX = dateToPxExport(event.date);
-                const textWidth = tempCtx.measureText(event.title).width;
-                const labelStartX = eventX - textWidth / 2;
-                let placed = false;
-                for (let i = 0; i < eventLanes.length; i++) {
-                    if (labelStartX > eventLanes[i] + labelPadding) {
-                        event.lane = i;
-                        eventLanes[i] = labelStartX + textWidth;
-                        placed = true;
-                        break;
+                const boxWidth = 180;
+                const startX = eventX - boxWidth / 2;
+                const endX = eventX + boxWidth / 2;
+
+                // Start from a baseline of 0, going upwards (negative y)
+                let lowestY = -30; // Initial position for events, relative to axis
+                for (const segment of skylineUp) {
+                    if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
+                        lowestY = Math.min(lowestY, segment.topY);
                     }
                 }
-                if (!placed) {
-                    event.lane = eventLanes.length;
-                    eventLanes.push(labelStartX + textWidth);
+                
+                let boxHeight = 0;
+                if (showDescriptions && (event.description || event.img)) {
+                    const titleHeight = 20; const padding = 10; let descHeight = 0; let imgHeight = 0;
+                    if (event.description) {
+                        const lines = wrapText(tempCtx, event.description, boxWidth - padding * 2);
+                        event.descriptionLines = lines;
+                        const fontSize = getDynamicFontSize(lines.length);
+                        const lineHeight = fontSize * 1.2;
+                        descHeight = lines.length * lineHeight;
+                    }
+                    if (event.img) imgHeight = 50 + (event.description ? padding : 0);
+                    boxHeight = titleHeight + descHeight + imgHeight + padding * 2;
                 }
-                event.y = topPadding + (event.lane * eventLaneHeight);
+                event.height = boxHeight;
+                // Store the relative Y position
+                event.y = lowestY - (boxHeight > 0 ? boxHeight + vSpacing : 0); 
+                
+                const newTopY = event.y - vSpacing;
+                
+                // Update skyline (same logic as before)
+                const newSkyline = []; let added = false;
+                for (const segment of skylineUp) {
+                    if (segment.endX <= startX) newSkyline.push(segment);
+                    else {
+                        if (!added) { newSkyline.push({ startX: startX, endX: endX, topY: newTopY }); added = true; }
+                        if (segment.endX > endX) newSkyline.push({startX: endX, endX: segment.endX, topY: segment.topY});
+                    }
+                }
+                if (!added) newSkyline.push({ startX: startX, endX: endX, topY: newTopY });
+                skylineUp.length = 0;
+                Array.prototype.push.apply(skylineUp, newSkyline.sort((a, b) => a.startX - b.startX));
                 layout.events.push(event);
             });
-            eventLaneCount = eventLanes.length;
-            const eventsHeight = eventLaneCount * eventLaneHeight;
-            
-            axisY = topPadding + eventsHeight + 15;
 
-            // --- Period Layout (Skyline) ---
-            const periodVSpacing = 15;
+            // --- 2. Find the topmost point and calculate the necessary offset ---
+            const minEventY = layout.events.reduce((min, e) => Math.min(min, e.y), 0);
+            const yOffset = topPadding - minEventY;
+
+            // --- 3. Set the final axis position and adjust all event Y coordinates ---
+            const axisY = yOffset;
+            layout.events.forEach(e => {
+                e.y += yOffset;
+            });
+
+            // --- 4. Period Layout (now using the correct axisY) ---
+            const skylineDown = [];
             const sortedPeriods = JSON.parse(JSON.stringify(state.periods)).sort((a, b) => a.startDate - b.startDate);
-            const skyline = [];
-            let maxPeriodY = axisY + 30;
+            let maxPeriodY = axisY + 30; // Start below the axis
 
             sortedPeriods.forEach(period => {
                 const startX = dateToPxExport(period.startDate);
                 const endX = dateToPxExport(period.endDate);
                 
                 let highestY = axisY + 30;
-                for (const segment of skyline) {
+                for (const segment of skylineDown) {
                      if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
-                         highestY = Math.max(highestY, segment.bottomY);
-                    }
+                          highestY = Math.max(highestY, segment.bottomY);
+                     }
                 }
-                period.y = highestY;
                 
-                const titleHeight = 20;
-                const paddingY = 10;
-                let descriptionHeight = 0;
+                tempCtx.font = 'bold 14px Inter';
+                const titleWidth = tempCtx.measureText(period.title).width;
+                const isTitleOutOfBounds = titleWidth > (endX - startX) - 20;
+                
+                period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
+                
+                const titleHeight = 20; const paddingY = 10; let descriptionHeight = 0; let imageHeight = 0;
                 if (showDescriptions && period.description) {
                     const pWidth = endX - startX;
                     const wrapWidth = Math.max(1, pWidth - (paddingY * 2));
-                    tempCtx.font = '12px Inter';
                     const lines = wrapText(tempCtx, period.description, wrapWidth);
                     period.descriptionLines = lines;
-                    descriptionHeight = lines.length * 14;
+                    const fontSize = getDynamicFontSize(lines.length);
+                    const lineHeight = fontSize * 1.2;
+                    descriptionHeight = lines.length * lineHeight;
                 }
-                const periodTotalHeight = titleHeight + descriptionHeight + (paddingY * 2);
-                const newBottomY = period.y + periodTotalHeight + periodVSpacing;
+                if (showDescriptions && period.img) imageHeight = 50 + (period.description ? paddingY : 0);
+
+                period.height = titleHeight + descriptionHeight + imageHeight + (paddingY * 2);
+                const newBottomY = period.y + period.height + vSpacing;
                 maxPeriodY = Math.max(maxPeriodY, newBottomY);
                 
-                const newSkyline = [];
-                let added = false;
-                for (const segment of skyline) {
-                    if (segment.endX <= startX) {
-                        newSkyline.push(segment);
-                    } else {
-                        if (!added) {
-                            newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
-                            added = true;
-                        }
-                        if (segment.endX > endX) {
-                           newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
-                        }
+                // Update skyline (same logic as before)
+                const newSkyline = []; let added = false;
+                for (const segment of skylineDown) {
+                    if (segment.endX <= startX) newSkyline.push(segment);
+                    else {
+                        if (!added) { newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY }); added = true; }
+                        if (segment.endX > endX) newSkyline.push({startX: endX, endX: segment.endX, bottomY: segment.bottomY});
                     }
                 }
-                if (!added) {
-                    newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
-                }
-                skyline.length = 0;
-                Array.prototype.push.apply(skyline, newSkyline.sort((a, b) => a.startX - b.startX));
+                if (!added) newSkyline.push({ startX: startX, endX: endX, bottomY: newBottomY });
+                skylineDown.length = 0;
+                Array.prototype.push.apply(skylineDown, newSkyline.sort((a, b) => a.startX - b.startX));
                 layout.periods.push(period);
             });
 
@@ -1399,7 +1430,7 @@
                     
                     const { layout, axisY } = getExportLayout(start, end, width, showDescriptions);
 
-                    drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end);
+                    drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end, showDescriptions);
                     
                     const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
                     
@@ -1436,16 +1467,22 @@
             lines.push(currentLine); return lines;
         }
 
-        function drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end) {
+        function drawOnTempCanvas(tempCtx, width, height, layout, axisY, start, end, showDescriptions) {
             const dateToPxFn = (date) => (date - start) * (width / (end - start));
-            const radius = 8;
-
+            
+            // Draw Axis & Markers
             tempCtx.beginPath(); tempCtx.moveTo(0, axisY); tempCtx.lineTo(width, axisY); tempCtx.strokeStyle = '#4A5568'; tempCtx.lineWidth = 2; tempCtx.stroke();
             
-            const tempState = { timelineStart: start, timelineEnd: end, view: { zoom: width / (end - start), markerDensity: 1 } };
-            const tempPxToDate = (px) => (px / tempState.view.zoom) + tempState.timelineStart;
+            const tempState = { view: { zoom: width / (end - start), markerDensity: 1 } };
+            const tempPxToDate = (px) => (px / tempState.view.zoom) + start;
+            
+            // A bit of a hack to reuse getMarkerInterval without refactoring it
+            const interval = getMarkerInterval.call({
+                state: tempState, 
+                canvas: {width: width / 1, getBoundingClientRect: () => ({left:0})}, // use DPR of 1 for export
+                pxToDate: tempPxToDate
+            });
 
-            const interval = getMarkerInterval.call({state: tempState, canvas: {width: width, getBoundingClientRect: () => ({left:0})}});
             const startYear = Math.floor(tempPxToDate(0) / interval) * interval;
             const endYear = Math.ceil(tempPxToDate(width) / interval) * interval;
             tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center'; tempCtx.font = '12px Inter';
@@ -1458,93 +1495,9 @@
                 tempCtx.fillText(year, x, axisY + tickHeight + 15);
             }
             
-            layout.events.forEach(event => {
-                const color = event.color || '#38A169';
-                const x = dateToPxFn(event.date);
-                const eventY = event.y;
-                
-                tempCtx.beginPath(); tempCtx.moveTo(x, axisY); tempCtx.lineTo(x, eventY); tempCtx.strokeStyle = color; tempCtx.lineWidth = 2; tempCtx.stroke();
-                tempCtx.beginPath(); tempCtx.arc(x, eventY, 6, 0, Math.PI * 2); tempCtx.fillStyle = color; tempCtx.fill();
-                tempCtx.fillStyle = '#2D3748'; tempCtx.font = 'bold 14px Inter'; tempCtx.textAlign = 'center'; tempCtx.fillText(event.title, x, eventY - 15);
-                
-                if (event.description) {
-                    tempCtx.font = '12px Inter'; tempCtx.fillStyle = '#4A5568'; tempCtx.textAlign = 'center';
-                    const lines = wrapText(tempCtx, event.description, 200);
-                    lines.forEach((line, i) => tempCtx.fillText(line, x, eventY + 15 + (i * 14)));
-                }
-            });
-
-            layout.periods.forEach(period => {
-                const color = period.color || '#4299E1';
-                const startX = dateToPxFn(period.startDate); const endX = dateToPxFn(period.endDate); const pWidth = endX - startX;
-                const periodY = period.y;
-                const titleHeight = 20;
-                const paddingY = 10;
-                let descriptionHeight = 0;
-                if (period.descriptionLines) {
-                    descriptionHeight = period.descriptionLines.length * 14;
-                }
-                const periodTotalHeight = titleHeight + descriptionHeight + (paddingY * 2);
-
-                if (period.isApproximate && pWidth > 0) {
-                    const gradient = tempCtx.createLinearGradient(startX, 0, endX, 0);
-                    const fadeWidth = Math.min(pWidth / 2, 20);
-                    const fadeStart = fadeWidth / pWidth;
-                    const fadeEnd = 1 - fadeStart;
-                    const baseColor = hexToRgba(color, 0.7);
-                    const transparentColor = hexToRgba(color, 0);
-                    gradient.addColorStop(0, transparentColor);
-                    gradient.addColorStop(fadeStart, baseColor);
-                    gradient.addColorStop(fadeEnd, baseColor);
-                    gradient.addColorStop(1, transparentColor);
-                    tempCtx.fillStyle = gradient;
-                } else {
-                    tempCtx.fillStyle = hexToRgba(color, 0.7);
-                }
-                tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodTotalHeight, radius); tempCtx.fill();
-
-                tempCtx.strokeStyle = darkenColor(color, 20); 
-                tempCtx.lineWidth = 2;
-                if (period.isApproximate) {
-                    tempCtx.beginPath();
-                    tempCtx.moveTo(startX + radius, periodY);
-                    tempCtx.lineTo(endX - radius, periodY);
-                    tempCtx.moveTo(startX + radius, periodY + periodTotalHeight);
-                    tempCtx.lineTo(endX - radius, periodY + periodTotalHeight);
-                    tempCtx.stroke();
-                } else {
-                    tempCtx.beginPath(); tempCtx.roundRect(startX, periodY, pWidth, periodTotalHeight, radius); tempCtx.stroke();
-                }
-                
-                tempCtx.save();
-                tempCtx.beginPath();
-                tempCtx.roundRect(startX, periodY, pWidth, periodTotalHeight, radius);
-                tempCtx.clip();
-                
-                const textFits = tempCtx.measureText(period.title).width < pWidth - 20;
-                tempCtx.font = 'bold 14px Inter';
-                tempCtx.textAlign = 'center';
-                tempCtx.textBaseline = 'middle';
-                const titleY2 = period.y + 15;
-
-                if (!textFits) {
-                    tempCtx.strokeStyle = 'white';
-                    tempCtx.lineWidth = 3;
-                    tempCtx.strokeText(period.title, startX + pWidth / 2, titleY2);
-                }
-                tempCtx.fillStyle = '#1A202C';
-                tempCtx.fillText(period.title, startX + pWidth / 2, titleY2);
-
-                if (period.descriptionLines && period.descriptionLines.length > 0) {
-                    tempCtx.font = '12px Inter';
-                    tempCtx.fillStyle = '#2D3748';
-                    tempCtx.textAlign = 'center';
-                    tempCtx.textBaseline = 'top';
-                    const lines = period.descriptionLines;
-                    lines.forEach((line, i) => tempCtx.fillText(line, startX + pWidth / 2, period.y + 30 + (i * 14)));
-                }
-                tempCtx.restore();
-            });
+            // Draw items using the main drawing functions, but passing the export context and layout data
+            drawEvents(tempCtx, dateToPxFn, layout.events, state.images, axisY, showDescriptions);
+            drawPeriods(tempCtx, dateToPxFn, layout.periods, state.images, showDescriptions);
         }
 
 
