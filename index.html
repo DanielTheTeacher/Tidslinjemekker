@@ -347,7 +347,7 @@
                 zoom: 1, // pixels per year
                 panX: 0,
                 panY: 0,
-                markerDensity: 1,
+                markerDensity: 3.425,
                 showDescriptions: false,
                 edgeIndicators: {
                     leftAnim: 0, // 0 (hidden) to 1 (visible)
@@ -568,6 +568,7 @@
                 period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
 
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
+                const yearRangeHeight = 10;
                 
                 if (state.view.showDescriptions && period.description) {
                     const width = endX - startX;
@@ -585,7 +586,7 @@
                     imageHeight = 50 + (period.description ? paddingY : 0);
                 }
 
-                period.height = titleHeight + descriptionHeight + imageHeight + (paddingY * 2);
+                period.height = titleHeight + yearRangeHeight + descriptionHeight + imageHeight + (paddingY * 2);
                 const newBottomY = period.y + period.height;
 
                 const newSkyline = [];
@@ -906,7 +907,18 @@
                 const isTitleOutOfBounds = titleWidth > width - 20;
 
                 const titleX = startX + width / 2;
-                const titleY = isTitleOutOfBounds ? period.y - 10 : period.y + 15;
+                let titleY = isTitleOutOfBounds ? period.y - 10 : period.y + 15;
+                
+                const yearRangeText = `(${Math.round(period.startDate)} - ${Math.round(period.endDate)})`;
+                const yearRangeWidth = context.measureText(yearRangeText).width;
+                if (isTitleOutOfBounds || yearRangeWidth > width - 20) {
+                     // Don't draw year range if it doesn't fit
+                } else {
+                    if (!isTitleOutOfBounds) {
+                        titleY -= 5; // Move title up to make space
+                    }
+                }
+                
 
                 if (isTitleOutOfBounds) {
                     context.strokeStyle = 'white';
@@ -916,12 +928,20 @@
                 context.fillStyle = '#1A202C'; 
                 context.fillText(period.title, titleX, titleY);
                 
+                if (!isTitleOutOfBounds && !(yearRangeWidth > width - 20)) {
+                    context.font = '9px Inter';
+                    context.fillStyle = '#4A5568';
+                    const yearRangeY = titleY + 14;
+                    context.fillText(yearRangeText, titleX, yearRangeY);
+                }
+
+                
                 context.save();
                 context.beginPath();
                 context.rect(startX, period.y, width, period.height);
                 context.clip();
 
-                let currentY = period.y + 24;
+                let currentY = period.y + 34;
                 if (showDescriptions && period.descriptionLines && period.descriptionLines.length > 0) {
                     const fontSize = getDynamicFontSize(period.descriptionLines.length);
                     const lineHeight = fontSize * 1.2;
@@ -1588,6 +1608,7 @@
                 period.y = highestY + (isTitleOutOfBounds ? 20 : 0);
                 
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
+                const yearRangeHeight = 10;
                 if (showDescriptions && period.description) {
                     const pWidth = endX - startX;
                     const wrapWidth = Math.max(1, pWidth - (paddingY * 2));
@@ -1599,7 +1620,7 @@
                 }
                 if (showDescriptions && period.img) imageHeight = 50 + (period.description ? paddingY : 0);
 
-                period.height = titleHeight + descriptionHeight + imageHeight + (paddingY * 2);
+                period.height = titleHeight + yearRangeHeight + descriptionHeight + imageHeight + (paddingY * 2);
                 const newBottomY = period.y + period.height;
                 maxPeriodY = Math.max(maxPeriodY, newBottomY);
                 
@@ -1805,6 +1826,8 @@
             const canvasWidth = canvas.width / dpr;
             const totalYears = state.view.end - state.view.start;
             
+            state.view.markerDensity = parseFloat(zoomSensitivitySlider.value);
+
             MIN_ZOOM_LEVEL = canvasWidth / (totalYears * 1.1);
             state.view.zoom = MIN_ZOOM_LEVEL;
             state.view.panX = 0;
