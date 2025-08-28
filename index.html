@@ -79,7 +79,7 @@
     <!-- Header & Controls -->
     <header class="bg-white shadow-md p-2 md:p-4 flex flex-wrap items-center justify-between gap-4 z-10">
         <h1 class="text-xl md:text-2xl font-bold text-gray-700 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><path d="M2 12h20"/><path d="M12 2a10 10 0 0 0-10 10v0a10 10 0 0 0 10 10v0a10 10 0 0 0 10-10v0a10 10 0 0 0-10-10v0Z"/><path d="M12 12v-2"/><path d="M12 18v-2"/></svg>
+            <img src="logo.jpeg" alt="Timeline Logo" class="w-7 h-7 rounded-full object-cover">
             Daniels tidslinje-mekker
         </h1>
         
@@ -462,9 +462,8 @@
             const endX = dateToPx(state.view.end);
             const animSpeed = 0.05;
 
-            // Show only when zoomed in significantly
-            const showLeft = startX >= -10 && state.view.zoom > MIN_ZOOM_LEVEL * 10;
-            const showRight = endX <= canvasWidth + 10 && state.view.zoom > MIN_ZOOM_LEVEL * 10;
+            const showLeft = startX >= -10 && state.view.zoom > MIN_ZOOM_LEVEL * 3;
+            const showRight = endX <= canvasWidth + 10 && state.view.zoom > MIN_ZOOM_LEVEL * 3;
 
             if (showLeft) {
                 state.view.edgeIndicators.leftAnim = Math.min(1, state.view.edgeIndicators.leftAnim + animSpeed);
@@ -651,7 +650,7 @@
                 const startX = -300;
                 const endX = 15;
                 const currentX = startX + (endX - startX) * animLeft;
-                const arrowY = 40;
+                const arrowY = 20;
                 
                 ctx.globalAlpha = animLeft;
                 ctx.beginPath();
@@ -664,13 +663,13 @@
                 ctx.stroke();
 
                 ctx.textAlign = 'left';
-                let currentY = arrowY + 20;
+                let currentY = arrowY + 15;
                 leftTexts.forEach(item => {
-                    ctx.font = 'bold 10px Inter';
+                    ctx.font = 'bold 9px Inter';
                     ctx.fillText(item.title, currentX + 25, currentY);
-                    ctx.font = '8px Inter';
-                    ctx.fillText(item.date, currentX + 25, currentY + 11);
-                    currentY += 28;
+                    ctx.font = '7px Inter';
+                    ctx.fillText(item.date, currentX + 25, currentY + 10);
+                    currentY += 22;
                 });
             }
 
@@ -686,7 +685,7 @@
                 const startX = canvasWidth + 300;
                 const endX = canvasWidth - 15;
                 const currentX = startX + (endX - startX) * animRight;
-                const arrowY = 40;
+                const arrowY = 20;
 
                 ctx.globalAlpha = animRight;
                 ctx.beginPath();
@@ -699,13 +698,13 @@
                 ctx.stroke();
 
                 ctx.textAlign = 'right';
-                let currentY = arrowY + 20;
+                let currentY = arrowY + 15;
                 rightTexts.forEach(item => {
-                    ctx.font = 'bold 10px Inter';
+                    ctx.font = 'bold 9px Inter';
                     ctx.fillText(item.title, currentX - 25, currentY);
-                    ctx.font = '8px Inter';
-                    ctx.fillText(item.date, currentX - 25, currentY + 11);
-                    currentY += 28;
+                    ctx.font = '7px Inter';
+                    ctx.fillText(item.date, currentX - 25, currentY + 10);
+                    currentY += 22;
                 });
             }
 
@@ -1422,10 +1421,21 @@
 
         document.getElementById('exportJpegAutoBtn').addEventListener('click', () => {
             const bounds = getTimelineBounds();
-            const width = 1920;
             const showDescriptions = state.view.showDescriptions;
-            const { totalHeight } = getExportLayout(bounds.min, bounds.max, width, showDescriptions);
-            exportJpeg(bounds.min, bounds.max, width, totalHeight, showDescriptions);
+            
+            const idealWidth = (bounds.max - bounds.min) * 1; // 1 pixel per year as a baseline
+            let width = Math.max(1920, Math.min(6000, idealWidth));
+            
+            let { totalHeight } = getExportLayout(bounds.min, bounds.max, width, showDescriptions);
+            let height = totalHeight;
+
+            if (height > 6000) {
+                const scaleFactor = 6000 / height;
+                height = 6000;
+                width = Math.round(width * scaleFactor);
+            }
+
+            exportJpeg(bounds.min, bounds.max, width, height, showDescriptions);
             closeModal(exportModal);
         });
         
@@ -1433,7 +1443,11 @@
             const bounds = getTimelineBounds();
             document.getElementById('exportStartDate').value = Math.floor(bounds.min);
             document.getElementById('exportEndDate').value = Math.ceil(bounds.max);
-            document.getElementById('exportWidth').value = 1920;
+            
+            const idealWidth = (bounds.max - bounds.min) * 1;
+            const width = Math.max(1920, Math.min(6000, idealWidth));
+            document.getElementById('exportWidth').value = width;
+
             document.getElementById('exportDescriptions').checked = state.view.showDescriptions;
             updateCalculatedExportHeight();
             openModal(exportJpegSettingsModal);
