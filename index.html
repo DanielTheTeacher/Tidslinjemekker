@@ -366,6 +366,7 @@
                 activeItem: null, // Can be an event or a period
                 dragType: null, // 'move', 'resize-left', 'resize-right', 'pan', 'create'
                 creationRect: null, // For drag-to-create-period
+                targetPeriod: null, // For reordering
             },
             mouse: {
                 x: 0,
@@ -499,7 +500,7 @@
         function calculateLayout(coordFn, viewHeight, panY, context = ctx) {
             const vSpacing = 15;
             const skylineUp = []; 
-            const skylineDown = [];
+            const lanesDown = [];
 
             const sortedEvents = [...state.events].sort((a, b) => a.date - b.date);
             sortedEvents.forEach(event => {
@@ -549,19 +550,10 @@
                 Array.prototype.push.apply(skylineUp, newSkyline.sort((a, b) => a.startX - b.startX));
             });
 
-            const sortedPeriods = [...state.periods].sort((a, b) => a.startDate - b.startDate);
+            const sortedPeriods = [...state.periods].sort((a, b) => (a.renderOrder || 0) - (b.renderOrder || 0));
             sortedPeriods.forEach(period => {
                 const startX = coordFn(period.startDate);
                 const endX = coordFn(period.endDate);
-                
-                let highestY = (viewHeight / 2) + panY + 30;
-                for (const segment of skylineDown) {
-                    if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
-                         highestY = Math.max(highestY, segment.bottomY);
-                    }
-                }
-                
-                period.y = highestY;
 
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 const yearRangeHeight = 10;
@@ -583,31 +575,23 @@
                 }
 
                 period.height = titleHeight + yearRangeHeight + descriptionHeight + imageHeight + (paddingY * 2);
-                const newBottomY = period.y + period.height;
 
-                const newSegments = [];
-                for (const segment of skylineDown) {
-                    const segStart = segment.startX;
-                    const segEnd = segment.endX;
-                    const segBottom = segment.bottomY;
-
-                    if (segEnd <= startX || segStart >= endX) {
-                        newSegments.push(segment);
-                        continue;
-                    }
-
-                    if (segStart < startX) {
-                        newSegments.push({ startX: segStart, endX: startX, bottomY: segBottom });
-                    }
-                    if (segEnd > endX) {
-                        newSegments.push({ startX: endX, endX: segEnd, bottomY: segBottom });
+                let assignedLane = -1;
+                for (let i = 0; i < lanesDown.length; i++) {
+                    if (startX >= lanesDown[i]) {
+                        assignedLane = i;
+                        break;
                     }
                 }
 
-                newSegments.push({ startX: startX, endX: endX, bottomY: newBottomY });
-
-                skylineDown.length = 0;
-                Array.prototype.push.apply(skylineDown, newSegments.sort((a, b) => a.startX - b.startX));
+                if (assignedLane === -1) {
+                    assignedLane = lanesDown.length;
+                    lanesDown.push(0);
+                }
+                
+                period.lane = assignedLane;
+                period.y = (viewHeight / 2) + panY + 30 + (assignedLane * (period.height));
+                lanesDown[assignedLane] = endX;
             });
         }
 
@@ -1110,6 +1094,18 @@
         canvas.addEventListener('mouseup', (e) => {
             if (!state.dragging.isDown) return;
 
+            if (state.dragging.dragType === 'reorder' && state.dragging.targetPeriod) {
+                const activePeriod = state.dragging.activeItem.item;
+                const targetPeriod = state.dragging.targetPeriod;
+
+                const activeOrder = activePeriod.renderOrder;
+                activePeriod.renderOrder = targetPeriod.renderOrder;
+                targetPeriod.renderOrder = activeOrder;
+
+                state.periods.sort((a,b) => (a.renderOrder || 0) - (b.renderOrder || 0));
+                state.periods.forEach((p, i) => p.renderOrder = i);
+            }
+
             const dragDistance = Math.sqrt(Math.pow(e.clientX - state.dragging.startX, 2) + Math.pow(e.clientY - state.dragging.startY, 2));
             state.dragging.isDown = false;
             canvas.classList.remove('grabbing');
@@ -1135,6 +1131,7 @@
             state.dragging.activeItem = null;
             state.dragging.creationRect = null;
             state.dragging.dragType = null;
+            state.dragging.targetPeriod = null;
             requestDraw();
             saveState();
         });
@@ -1164,17 +1161,32 @@
                 canvas.classList.add('grabbing');
                 
                 if (state.dragging.activeItem) {
-                    const dx = e.clientX - state.dragging.lastX;
-                    const item = state.dragging.activeItem.item;
-                    const type = state.dragging.activeItem.type;
-                    const dateChange = dx / state.view.zoom;
+                    const dy = e.clientY - state.dragging.lastY;
+                    if (state.dragging.activeItem.type === 'period' && Math.abs(dy) > 10 && state.dragging.dragType === 'move') {
+                        state.dragging.dragType = 'reorder';
+                    }
 
-                    if (state.dragging.dragType === 'move') {
-                        if (type === 'event') { item.date += dateChange; } 
-                        else { item.startDate += dateChange; item.endDate += dateChange; }
-                    } else if (type === 'period') {
-                        if (state.dragging.dragType === 'resize-right') { item.endDate = Math.max(item.startDate + 0.1, pxToDate(mouseX)); } 
-                        else if (state.dragging.dragType === 'resize-left') { item.startDate = Math.min(item.endDate - 0.1, pxToDate(mouseX)); }
+                    if (state.dragging.dragType === 'reorder') {
+                        const activeId = state.dragging.activeItem.item.id;
+                        state.dragging.targetPeriod = state.periods.find(p => {
+                            if (p.id === activeId) return false;
+                            const startX = dateToPx(p.startDate);
+                            const endX = dateToPx(p.endDate);
+                            return mouseX >= startX && mouseX <= endX && mouseY >= p.y && mouseY <= p.y + p.height;
+                        });
+                    } else {
+                        const dx = e.clientX - state.dragging.lastX;
+                        const item = state.dragging.activeItem.item;
+                        const type = state.dragging.activeItem.type;
+                        const dateChange = dx / state.view.zoom;
+
+                        if (state.dragging.dragType === 'move') {
+                            if (type === 'event') { item.date += dateChange; } 
+                            else { item.startDate += dateChange; item.endDate += dateChange; }
+                        } else if (type === 'period') {
+                            if (state.dragging.dragType === 'resize-right') { item.endDate = Math.max(item.startDate + 0.1, pxToDate(mouseX)); } 
+                            else if (state.dragging.dragType === 'resize-left') { item.startDate = Math.min(item.endDate - 0.1, pxToDate(mouseX)); }
+                        }
                     }
                     state.dragging.lastX = e.clientX;
                     state.dragging.lastY = e.clientY;
@@ -1460,6 +1472,7 @@
                 if (index !== -1) state.periods[index] = { ...state.periods[index], ...data };
             } else {
                 data.id = Date.now();
+                data.renderOrder = state.periods.length;
                 state.periods.push(data);
             }
             loadImage(data); requestDraw(); e.target.reset(); closeModal(periodModal);
@@ -1588,22 +1601,13 @@
             const axisY = yOffset;
             layout.events.forEach(e => { e.y += yOffset; });
 
-            const skylineDown = [];
-            const sortedPeriods = JSON.parse(JSON.stringify(state.periods)).sort((a, b) => a.startDate - b.startDate);
+            const lanesDown = [];
+            const sortedPeriods = JSON.parse(JSON.stringify(state.periods)).sort((a, b) => (a.renderOrder || 0) - (b.renderOrder || 0));
             let maxPeriodY = axisY + 30;
 
             sortedPeriods.forEach(period => {
                 const startX = dateToPxExport(period.startDate);
                 const endX = dateToPxExport(period.endDate);
-                
-                let highestY = axisY + 30;
-                for (const segment of skylineDown) {
-                     if (Math.max(startX, segment.startX) < Math.min(endX, segment.endX)) {
-                           highestY = Math.max(highestY, segment.bottomY);
-                     }
-                }
-                
-                period.y = highestY;
                 
                 const titleHeight = 16; const paddingY = 4; let descriptionHeight = 0; let imageHeight = 0;
                 const yearRangeHeight = 10;
@@ -1619,31 +1623,24 @@
                 if (showDescriptions && period.img) imageHeight = 50 + (period.description ? paddingY : 0);
 
                 period.height = titleHeight + yearRangeHeight + descriptionHeight + imageHeight + (paddingY * 2);
-                const newBottomY = period.y + period.height;
-                maxPeriodY = Math.max(maxPeriodY, newBottomY);
-                
-                const newSegments = [];
-                for (const segment of skylineDown) {
-                    const segStart = segment.startX;
-                    const segEnd = segment.endX;
-                    const segBottom = segment.bottomY;
 
-                    if (segEnd <= startX || segStart >= endX) {
-                        newSegments.push(segment);
-                        continue;
-                    }
-
-                    if (segStart < startX) {
-                        newSegments.push({ startX: segStart, endX: startX, bottomY: segBottom });
-                    }
-                    if (segEnd > endX) {
-                        newSegments.push({ startX: endX, endX: segEnd, bottomY: segBottom });
+                let assignedLane = -1;
+                for (let i = 0; i < lanesDown.length; i++) {
+                    if (startX >= lanesDown[i]) {
+                        assignedLane = i;
+                        break;
                     }
                 }
-                newSegments.push({ startX: startX, endX: endX, bottomY: newBottomY });
-                skylineDown.length = 0;
-                Array.prototype.push.apply(skylineDown, newSegments.sort((a, b) => a.startX - b.startX));
 
+                if (assignedLane === -1) {
+                    assignedLane = lanesDown.length;
+                    lanesDown.push(0);
+                }
+                
+                period.y = axisY + 30 + (assignedLane * period.height);
+                lanesDown[assignedLane] = endX;
+                
+                maxPeriodY = Math.max(maxPeriodY, period.y + period.height);
                 layout.periods.push(period);
             });
 
