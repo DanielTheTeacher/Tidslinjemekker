@@ -766,13 +766,40 @@
 
         function drawHoverIndicator() {
             if (state.dragging.isDown || state.mouse.isOverItem) return;
-            const axisY = (canvas.height / window.devicePixelRatio / 2) + state.view.panY;
+            const dpr = window.devicePixelRatio || 1;
+            const canvasHeight = canvas.height / dpr;
+            const axisY = (canvasHeight / 2) + state.view.panY;
             const x = state.mouse.x;
             const y = axisY - 30;
 
+            // Draw top ghost line and circle
             ctx.globalAlpha = 0.5;
-            ctx.beginPath(); ctx.moveTo(x, axisY); ctx.lineTo(x, y); ctx.strokeStyle = '#A0AEC0'; ctx.lineWidth = 2; ctx.stroke();
-            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fillStyle = '#A0AEC0'; ctx.fill();
+            ctx.beginPath(); 
+            ctx.moveTo(x, axisY); 
+            ctx.lineTo(x, y); 
+            ctx.strokeStyle = '#A0AEC0'; 
+            ctx.lineWidth = 2; 
+            ctx.stroke();
+            
+            ctx.beginPath(); 
+            ctx.arc(x, y, 6, 0, Math.PI * 2); 
+            ctx.fillStyle = '#A0AEC0'; 
+            ctx.fill();
+
+            // Draw bottom ghost line
+            ctx.beginPath();
+            ctx.moveTo(x, axisY);
+            ctx.lineTo(x, canvasHeight);
+            ctx.stroke();
+
+            // Draw year text
+            const year = Math.round(pxToDate(x));
+            const yearText = formatYear(year);
+            ctx.font = '12px Inter';
+            ctx.fillStyle = '#A0AEC0';
+            ctx.textAlign = 'left';
+            ctx.fillText(yearText, x + 10, y + 4);
+
             ctx.globalAlpha = 1.0;
         }
 
