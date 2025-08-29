@@ -72,6 +72,19 @@
         	border: 1px solid #e2e8f0;
             border-radius: 50%;
         }
+        /* Styles for the new compact navigator */
+        #compactNavigatorWrapper {
+            transform: translateY(calc(100% - 30px));
+        }
+        #compactNavigatorWrapper:hover {
+            transform: translateY(0);
+        }
+        #compactNavigatorWrapper:hover #navigatorTab svg {
+            transform: rotate(180deg);
+        }
+        #navigatorTab svg {
+            transition: transform 0.3s ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex flex-col h-screen overflow-hidden">
@@ -109,34 +122,41 @@
     <main class="flex-grow relative">
         <canvas id="timelineCanvas"></canvas>
         
-        <!-- IMPROVED: Mini Navigator -->
-        <div id="miniNavigator" class="absolute top-4 right-4 bg-white bg-opacity-90 backdrop-blur-sm p-2 rounded-lg shadow-lg z-20 w-64 flex flex-col gap-2">
-             <div class="flex items-center gap-2">
-                <label for="jumpToYear" class="text-xs font-medium whitespace-nowrap">Gå til:</label>
-                <input type="number" id="jumpToYear" class="w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs">
-                <button id="jumpToYearBtn" class="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-xs font-semibold">Gå</button>
+        <!-- NEW Compact Navigator -->
+        <div id="compactNavigatorWrapper" class="fixed bottom-0 left-4 z-20 transition-transform duration-300 ease-in-out w-72">
+            <div id="navigatorTab" class="w-full h-[30px] bg-white/80 backdrop-blur-sm rounded-t-lg flex items-center justify-center cursor-pointer shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                </svg>
             </div>
-            <canvas id="miniCanvas" class="w-full h-16 rounded cursor-pointer border border-gray-200"></canvas>
-        </div>
+            <div id="navigatorContent" class="bg-white bg-opacity-90 backdrop-blur-sm p-3 rounded-t-lg shadow-lg flex flex-col gap-3">
+                <!-- Mini Canvas -->
+                <canvas id="miniCanvas" class="w-full h-12 rounded cursor-pointer border border-gray-200"></canvas>
+                
+                <!-- Go to year -->
+                <div class="flex items-center gap-2">
+                    <label for="jumpToYear" class="text-xs font-medium whitespace-nowrap">Gå til år:</label>
+                    <input type="number" id="jumpToYear" class="w-20 p-1 border border-gray-300 rounded-md shadow-sm text-xs">
+                    <button id="jumpToYearBtn" class="flex-grow px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-xs font-semibold">Gå</button>
+                </div>
+                
+                <!-- Zoom Level -->
+                <div class="flex items-center gap-2">
+                    <label for="zoomLevel" class="text-xs font-medium">Zoom</label>
+                    <input type="range" id="zoomLevel" min="0" max="100" value="0" class="w-full">
+                </div>
 
-        <!-- Bottom Controls -->
-        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white bg-opacity-80 backdrop-blur-sm p-3 rounded-lg shadow-lg z-20 flex items-center gap-6 opacity-70 hover:opacity-100 transition-opacity duration-300">
-            <!-- Zoom Level -->
-            <div class="flex items-center gap-2">
-                <label for="zoomLevel" class="text-sm font-medium">Zoom</label>
-                <input type="range" id="zoomLevel" min="0" max="100" value="0" class="w-48">
-            </div>
+                <!-- Detail Level -->
+                <div class="flex items-center gap-2">
+                    <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå</label>
+                    <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="3.875" class="w-full">
+                </div>
 
-            <!-- Detail Level -->
-            <div class="flex items-center gap-2">
-                <label for="zoomSensitivity" class="text-sm font-medium">Detaljnivå</label>
-                <input type="range" id="zoomSensitivity" min="0.5" max="5" step="0.1" value="3.875" class="w-48">
-            </div>
-
-            <!-- Show Descriptions Toggle -->
-            <div class="flex items-center gap-2 pl-4 border-l">
-                <label for="showDescriptionsToggle" class="text-sm font-medium cursor-pointer">Vis beskrivelser</label>
-                <input type="checkbox" id="showDescriptionsToggle" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer">
+                <!-- Show Descriptions Toggle -->
+                <div class="flex items-center gap-2 pt-2 border-t mt-1">
+                    <label for="showDescriptionsToggle" class="text-sm font-medium cursor-pointer">Vis beskrivelser</label>
+                    <input type="checkbox" id="showDescriptionsToggle" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer">
+                </div>
             </div>
         </div>
     </main>
@@ -1073,6 +1093,9 @@
                 return;
             }
 
+            // Keep dates within master timeline bounds, but allow user to input outside of it
+            // The view will be clamped, but the master timeline is conceptually infinite
+            // For now, let's keep it clamped to the master for simplicity.
             start = Math.max(MASTER_TIMELINE_START, start);
             end = Math.min(MASTER_TIMELINE_END, end);
             startDateInput.value = start;
@@ -1409,8 +1432,10 @@
             miniCtx.fillStyle = '#cbd5e0';
             miniCtx.fillRect(0, viewHeight / 2 - 1, viewWidth, 2);
 
-            const masterDuration = MASTER_TIMELINE_END - MASTER_TIMELINE_START;
-            const yearToPx = (year) => ((year - MASTER_TIMELINE_START) / masterDuration) * viewWidth;
+            // CHANGED: Use the current view's start and end for the navigator's range
+            const viewDuration = state.view.end - state.view.start;
+            if (viewDuration <= 0) return; // Avoid division by zero
+            const yearToPx = (year) => ((year - state.view.start) / viewDuration) * viewWidth;
 
             state.periods.forEach(p => {
                 const startX = yearToPx(p.startDate);
@@ -1425,8 +1450,11 @@
                 miniCtx.fillRect(x - 1, 0, 2, viewHeight * 0.5);
             });
 
+            // CHANGED: The purple box now represents the visible area of the main canvas
+            const mainCanvasWidth = canvas.width / dpr;
             const viewStartOnMaster = pxToDate(0);
-            const viewEndOnMaster = pxToDate(viewWidth);
+            const viewEndOnMaster = pxToDate(mainCanvasWidth);
+            
             const viewStartPx = yearToPx(viewStartOnMaster);
             const viewEndPx = yearToPx(viewEndOnMaster);
 
@@ -1441,8 +1469,9 @@
             const rect = miniCanvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             
-            const masterDuration = MASTER_TIMELINE_END - MASTER_TIMELINE_START;
-            const clickedYear = (mouseX / miniCanvas.clientWidth) * masterDuration + MASTER_TIMELINE_START;
+            // CHANGED: Calculate clicked year based on current view range
+            const viewDuration = state.view.end - state.view.start;
+            const clickedYear = (mouseX / miniCanvas.clientWidth) * viewDuration + state.view.start;
             
             centerOnYear(clickedYear);
         }
